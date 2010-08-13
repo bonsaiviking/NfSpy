@@ -130,6 +130,19 @@ class NFSFuse(fuse.Fuse):
 
         return fuse.Fuse.main(self)
 
+    def _gethandle(self, dh, elem):
+        status, rest = self.ncl.Lookup((dh, elem))
+        if status <> NFS_OK:
+            raise NFSError(status)
+        else:
+            dh, fattr = rest
+            self.ncl.fuid = fattr[3]
+            self.ncl.fgid = fattr[4]
+        return (dh, fattr)
+
+    #TODO: make this thread safe. Since we are setting self.ncl.{fuid,fgid}
+    #      many times within this, it can't be called my more than one thread
+    #      at a time. Need a mutex on gethandle, or something.
     def gethandle(self, path):
         elements = path.split("/")
         elements = filter(lambda x: x != '', elements)
@@ -137,14 +150,11 @@ class NFSFuse(fuse.Fuse):
         fattr = self.rootattr
         self.ncl.fuid = fattr[3]
         self.ncl.fgid = fattr[4]
+        tmppath = ""
         for elem in elements:
-            status, rest = self.ncl.Lookup((dh, elem))
-            if status <> NFS_OK:
-                raise NFSError(status)
-            else:
-                dh, fattr = rest
-                self.ncl.fuid = fattr[3]
-                self.ncl.fgid = fattr[4]
+            tmppath += "/" + elem
+            #TODO: cache lookup on tmppath first, skip _gethandle if hit
+            dh, fattr = self._gethandle(dh, elem)
         return (dh, fattr)
 
     #'getattr'
