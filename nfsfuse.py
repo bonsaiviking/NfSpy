@@ -95,7 +95,6 @@ class NFSFuse(fuse.Fuse):
         fuse.Fuse.__init__(self, *args, **kw)
         self.fuse_args.add("ro", True)
         self.authlock = Lock()
-        self.handles = LRU(100)
         #self.handleheap = []
         #self.handledict = weakref.WeakValueDictionary()
 
@@ -131,6 +130,10 @@ class NFSFuse(fuse.Fuse):
         self.tsize = rest[0]
         if not self.tsize:
             self.tsize = 4096
+        if hasattr(self,"cache"):
+            self.handles = LRU(cache)
+        else:
+            self.handles = LRU(100)
 
         return fuse.Fuse.main(self)
 
@@ -154,8 +157,11 @@ class NFSFuse(fuse.Fuse):
         tmppath = ""
         for elem in elements:
             tmppath += "/" + elem
-            #TODO: cache lookup on tmppath first, skip _gethandle if hit
-            dh, fattr = self._gethandle(dh, elem)
+            try:
+                dh, fattr = self.handles[tmppath]
+            except KeyError:
+                dh, fattr = self._gethandle(dh, elem)
+                self.handles[tmppath] = (dh, fattr)
         return (dh, fattr)
 
     #'getattr'
@@ -352,7 +358,8 @@ def main():
         usage=usage, dash_s_do='setsingle')
     server.parser.add_option(mountopt='server',metavar='HOST:PATH', \
         help='connect to server HOST:PATH')
-    server.parser.add_option(mountopt='hide')
+    server.parser.add_option(mountopt='hide',help='Immediately unmount from the server, staying mounted on the client')
+    server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
     server.parse(values=server, errex=1)
     server.main()
 
