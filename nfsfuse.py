@@ -13,6 +13,8 @@ from nfsclient import *
 from mountclient import TCPMountClient
 #from heapq import heappush, heappop, heappushpop
 import os
+from threading import Lock
+from lrucache import LRU
 
 fuse.fuse_python_api = (0, 2)
 
@@ -92,6 +94,8 @@ class NFSFuse(fuse.Fuse):
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
         self.fuse_args.add("ro", True)
+        self.authlock = Lock()
+        self.handles = LRU(100)
         #self.handleheap = []
         #self.handledict = weakref.WeakValueDictionary()
 
@@ -140,9 +144,6 @@ class NFSFuse(fuse.Fuse):
             self.ncl.fgid = fattr[4]
         return (dh, fattr)
 
-    #TODO: make this thread safe. Since we are setting self.ncl.{fuid,fgid}
-    #      many times within this, it can't be called my more than one thread
-    #      at a time. Need a mutex on gethandle, or something.
     def gethandle(self, path):
         elements = path.split("/")
         elements = filter(lambda x: x != '', elements)
@@ -159,11 +160,14 @@ class NFSFuse(fuse.Fuse):
 
     #'getattr'
     def getattr(self, path):
+        self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         st = NFSStat()
         st.st_mode, st.st_nlink, st.st_uid, st.st_gid, st.st_size \
             = fattr[1:6]
@@ -177,9 +181,11 @@ class NFSFuse(fuse.Fuse):
         if path == "/":
             return ''
         else:
+            self.authlock.acquire()
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
@@ -191,15 +197,21 @@ class NFSFuse(fuse.Fuse):
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
 
     #'readdir'
     def readdir(self, path, offset):
+        self.authlock.acquire()
         if path == "/":
             handle, fattr = self.rootdh, self.rootattr
+            self.ncl.fuid = self.rootattr[3]
+            self.ncl.fgid = self.rootattr[4]
         else:
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
@@ -208,6 +220,8 @@ class NFSFuse(fuse.Fuse):
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
 
     #'mknod'
     #'mkdir'
@@ -226,9 +240,11 @@ class NFSFuse(fuse.Fuse):
         if path == "/":
             raise IOError( EISDIR, os.strerror(EISDIR))
         else:
+            self.authlock.acquire()
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
@@ -240,6 +256,8 @@ class NFSFuse(fuse.Fuse):
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         return data
 
     #'write'
@@ -267,11 +285,14 @@ class NFSFuse(fuse.Fuse):
     #'removexattr'
     #'access'
     def access(self, path, mode):
+        self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         if mode == os.F_OK:
             return 0
         rmode = fattr[1]
