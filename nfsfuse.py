@@ -169,6 +169,12 @@ class NFSFuse(fuse.Fuse):
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
+            status, rest = self.ncl.Getattr(handle)
+            if status <> NFS_OK:
+                raise NFSError(status)
+            else:
+                fattr = rest
+                self.handles[path] = (handle, fattr)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
