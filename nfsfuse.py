@@ -162,6 +162,8 @@ class NFSFuse(fuse.Fuse):
             except KeyError:
                 dh, fattr = self._gethandle(dh, elem)
                 self.handles[tmppath] = (dh, fattr)
+            self.ncl.fuid = fattr[3]
+            self.ncl.fgid = fattr[4]
         return (dh, fattr)
 
     #'getattr'
@@ -227,13 +229,13 @@ class NFSFuse(fuse.Fuse):
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
-            for dir in self.ncl.Listdir(handle, self.tsize):
-                yield fuse.Direntry(dir[1])
+            entries = (fuse.Direntry(dir[1]) for dir in self.ncl.Listdir(handle, self.tsize))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
+        return entries
 
     #'mknod'
     #'mkdir'
