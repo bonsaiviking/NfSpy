@@ -76,3 +76,24 @@ class LRU:
             yield j
     def keys(self):
         return self.d.keys()
+    def prune(self,func):
+        '''prune from left until func(self[x]) returns false'''
+        count = 0
+        cur = self.first
+        while cur and func(cur.me[1]):
+            count = count + 1
+            cur2 = cur.next
+            if cur2 is not None:
+                cur2.prev = None
+            del self.d[cur.me[0]]
+            cur = cur2
+        if cur is None:
+            self.first = None
+            return count
+        self.first = cur.next
+        if cur.next:
+            cur.next.prev = None
+        else:
+            self.last = None
+        del self.d[cur.me[0]]
+        return count + 1
