@@ -131,7 +131,7 @@ class NFSFuse(fuse.Fuse):
         if not self.tsize:
             self.tsize = 4096
         if hasattr(self,"cache"):
-            self.handles = LRU(cache)
+            self.handles = LRU(self.cache)
         else:
             self.handles = LRU(100)
 
