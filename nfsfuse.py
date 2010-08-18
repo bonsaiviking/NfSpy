@@ -157,9 +157,9 @@ class NFSFuse(fuse.Fuse):
         st = NFSStat()
         st.st_mode, st.st_nlink, st.st_uid, st.st_gid, st.st_size \
             = fattr[1:6]
-        st.st_atime = fattr[11][1]
-        st.st_mtime = fattr[12][1]
-        st.st_ctime = fattr[13][1]
+        st.st_atime = fattr[11][0]
+        st.st_mtime = fattr[12][0]
+        st.st_ctime = fattr[13][0]
         return st
 
     #'readlink'
