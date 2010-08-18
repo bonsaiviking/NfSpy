@@ -11,8 +11,9 @@ from socket import gethostname
 from time import time
 from nfsclient import *
 from mountclient import TCPMountClient
-#from heapq import heappush, heappop, heappushpop
 import os
+from threading import Lock
+from lrucache import LRU
 
 fuse.fuse_python_api = (0, 2)
 
@@ -92,8 +93,9 @@ class NFSFuse(fuse.Fuse):
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
         self.fuse_args.add("ro", True)
-        #self.handleheap = []
-        #self.handledict = weakref.WeakValueDictionary()
+        self.authlock = Lock()
+        self.cachetimeout = 30 # seconds
+        self.cache = 1024
 
     def main(self):
         if hasattr(self,"server"):
@@ -127,33 +129,58 @@ class NFSFuse(fuse.Fuse):
         self.tsize = rest[0]
         if not self.tsize:
             self.tsize = 4096
+        sys.stderr.write("cache = %d\ntimeout = %d" % (self.cache,self.cachetimeout))
+        self.handles = LRU(self.cache)
 
         return fuse.Fuse.main(self)
+
+    def _gethandle(self, dh, elem):
+        status, rest = self.ncl.Lookup((dh, elem))
+        if status <> NFS_OK:
+            raise NFSError(status)
+        else:
+            dh, fattr = rest
+            self.ncl.fuid = fattr[3]
+            self.ncl.fgid = fattr[4]
+        return (dh, fattr)
 
     def gethandle(self, path):
         elements = path.split("/")
         elements = filter(lambda x: x != '', elements)
+        now = time()
+        self.handles.prune(lambda x: now - x[2] > self.cachetimeout)
         dh = self.rootdh
         fattr = self.rootattr
         self.ncl.fuid = fattr[3]
         self.ncl.fgid = fattr[4]
+        tmppath = ""
         for elem in elements:
-            status, rest = self.ncl.Lookup((dh, elem))
-            if status <> NFS_OK:
-                raise NFSError(status)
-            else:
-                dh, fattr = rest
-                self.ncl.fuid = fattr[3]
-                self.ncl.fgid = fattr[4]
+            tmppath += "/" + elem
+            try:
+                dh, fattr, cachetime = self.handles[tmppath]
+            except KeyError:
+                dh, fattr = self._gethandle(dh, elem)
+                self.handles[tmppath] = (dh, fattr, now)
+            self.ncl.fuid = fattr[3]
+            self.ncl.fgid = fattr[4]
         return (dh, fattr)
 
     #'getattr'
     def getattr(self, path):
+        self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
+            status, rest = self.ncl.Getattr(handle)
+            if status <> NFS_OK:
+                raise NFSError(status)
+            else:
+                fattr = rest
+                self.handles[path] = (handle, fattr, time())
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         st = NFSStat()
         st.st_mode, st.st_nlink, st.st_uid, st.st_gid, st.st_size \
             = fattr[1:6]
@@ -167,9 +194,11 @@ class NFSFuse(fuse.Fuse):
         if path == "/":
             return ''
         else:
+            self.authlock.acquire()
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
@@ -181,23 +210,31 @@ class NFSFuse(fuse.Fuse):
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
 
     #'readdir'
     def readdir(self, path, offset):
+        self.authlock.acquire()
         if path == "/":
             handle, fattr = self.rootdh, self.rootattr
+            self.ncl.fuid = self.rootattr[3]
+            self.ncl.fgid = self.rootattr[4]
         else:
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
-            for dir in self.ncl.Listdir(handle, self.tsize):
-                yield fuse.Direntry(dir[1])
+            entries = (fuse.Direntry(dir[1]) for dir in self.ncl.Listdir(handle, self.tsize))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
+        return entries
 
     #'mknod'
     #'mkdir'
@@ -216,9 +253,11 @@ class NFSFuse(fuse.Fuse):
         if path == "/":
             raise IOError( EISDIR, os.strerror(EISDIR))
         else:
+            self.authlock.acquire()
             try:
                 handle, fattr = self.gethandle(path)
             except NFSError as e:
+                self.authlock.release()
                 no = e.errno()
                 raise IOError(no, os.strerror(no), path)
         try:
@@ -230,6 +269,8 @@ class NFSFuse(fuse.Fuse):
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         return data
 
     #'write'
@@ -257,11 +298,14 @@ class NFSFuse(fuse.Fuse):
     #'removexattr'
     #'access'
     def access(self, path, mode):
+        self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
+        finally:
+            self.authlock.release()
         if mode == os.F_OK:
             return 0
         rmode = fattr[1]
@@ -314,14 +358,17 @@ class NFSStatVfs(fuse.StatVfs):
 
 def main():
     usage="""
-        NFSFuse: An NFS client with auth spoofing. Must be run as root.
-    """ + fuse.Fuse.fusage
+NFSFuse: An NFS client with auth spoofing. Must be run as root.
 
-    server = NFSFuse(version="%prog " + fuse.__version__, \
+""" + fuse.Fuse.fusage
+
+    server = NFSFuse(version="%prog " + fuse.__version__,
         usage=usage, dash_s_do='setsingle')
-    server.parser.add_option(mountopt='server',metavar='HOST:PATH', \
+    server.parser.add_option(mountopt='server',metavar='HOST:PATH',
         help='connect to server HOST:PATH')
-    server.parser.add_option(mountopt='hide')
+    server.parser.add_option(mountopt='hide',action='store_true',help='Immediately unmount from the server, staying mounted on the client')
+    server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
+    server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
     server.parse(values=server, errex=1)
     server.main()
 
