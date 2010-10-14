@@ -44,7 +44,7 @@ class NFSError(Exception):
         try:
             err = self.lookup[self.value]
         except KeyError:
-            raise NFSError, self.value
+            err = self.value
         return err
 
 
@@ -98,6 +98,9 @@ class NFSFuse(fuse.Fuse):
         self.cache = 1024
 
     def main(self):
+        return fuse.Fuse.main(self)
+
+    def fsinit(self):
         if hasattr(self,"server"):
             self.host, self.path = self.server.split(':',1);
         else:
@@ -125,14 +128,13 @@ class NFSFuse(fuse.Fuse):
 
         status, rest = self.ncl.Statfs(self.rootdh)
         if status <> NFS_OK:
-            return -ENOSYS
+            raise NFSError(status)
         self.tsize = rest[0]
         if not self.tsize:
             self.tsize = 4096
         sys.stderr.write("cache = %d\ntimeout = %d" % (self.cache,self.cachetimeout))
         self.handles = LRU(self.cache)
 
-        return fuse.Fuse.main(self)
 
     def _gethandle(self, dh, elem):
         status, rest = self.ncl.Lookup((dh, elem))
