@@ -5,7 +5,7 @@ all: lrucache.pyc mountclient.pyc nfsclient.pyc rpc.pyc
 
 install: nfsfuse.py all
 	cp *.pyc /usr/local/lib/python2.6/site-packages/
-	ln -s `pwd`/$< /usr/local/bin/nfsfuse
+	test -h /usr/local/bin/nfsfuse || ln -s `pwd`/$< /usr/local/bin/nfsfuse
 
 clean:
 	rm -f *.pyc
