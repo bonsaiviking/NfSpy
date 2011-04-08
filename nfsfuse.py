@@ -10,7 +10,7 @@ from errno import *
 from socket import gethostname
 from time import time
 from nfsclient import *
-from mountclient import TCPMountClient
+from mountclient import TCPMountClient,UDPMountClient
 import os
 from threading import Lock
 from lrucache import LRU
@@ -96,6 +96,8 @@ class NFSFuse(fuse.Fuse):
         self.authlock = Lock()
         self.cachetimeout = 30 # seconds
         self.cache = 1024
+        self.mcl = None
+        self.handles = None
 
     def main(self):
         return fuse.Fuse.main(self)
@@ -106,7 +108,11 @@ class NFSFuse(fuse.Fuse):
         else:
             raise fuse.FuseError, "No server specified"
 
-        self.mcl = TCPMountClient(self.host)
+        if hasattr(self,"udpmount"):
+            self.mcl = UDPMountClient(self.host)
+        else:
+            self.mcl = TCPMountClient(self.host)
+
         try:
             status, dirhandle = self.mcl.Mnt(self.path)
             if status <> NFS_OK:
@@ -371,6 +377,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='hide',action='store_true',help='Immediately unmount from the server, staying mounted on the client')
     server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
     server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
+    server.parser.add_option(mountopt='udpmount',action='store_true',help='Use UDP transport for mount operation')
     server.parse(values=server, errex=1)
     server.main()
 
