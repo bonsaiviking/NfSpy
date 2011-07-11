@@ -10,8 +10,8 @@
 # protocol, use multiple inheritance as shown below.
 
 
-import rpc
-from rpc import Packer, Unpacker, TCPClient, UDPClient
+import nfspy.rpc as rpc
+from nfspy.rpc import Packer, Unpacker, TCPClient, UDPClient
 
 
 # Program number and version for the mount protocol

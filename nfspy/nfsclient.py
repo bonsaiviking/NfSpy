@@ -1,9 +1,9 @@
 # Modified from code distributed with Python 2.6
 # NFS RPC client -- RFC 1094
 
-import rpc
-from rpc import UDPClient, TCPClient
-from mountclient import FHSIZE, MountPacker, MountUnpacker
+import nfspy.rpc as rpc
+from nfspy.rpc import UDPClient, TCPClient
+from nfspy.mountclient import FHSIZE, MountPacker, MountUnpacker
 
 NFS_PROGRAM = 100003
 NFS_VERSION = 2

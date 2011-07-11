@@ -4,16 +4,16 @@
 # by Daniel Miller
 
 import sys
-import rpc
+import nfspy.rpc
 import fuse
 from errno import *
 from socket import gethostname
 from time import time
-from nfsclient import *
-from mountclient import TCPMountClient,UDPMountClient
+from nfspy.nfsclient import *
+from nfspy.mountclient import TCPMountClient,UDPMountClient
 import os
 from threading import Lock
-from lrucache import LRU
+from nfspy.lrucache import LRU
 
 fuse.fuse_python_api = (0, 2)
 
