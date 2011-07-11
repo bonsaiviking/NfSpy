@@ -9,5 +9,6 @@ setup( name='NfSpy',
         author_email='bonsaiviking@gmail.com',
         url='https://github.com/bonsaiviking/nfspy',
         packages=['nfspy'],
+        requires=['fuse'],
         scripts=['nfspy/nfspy.py'],
         )
