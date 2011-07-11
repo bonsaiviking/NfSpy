@@ -1,3 +1,4 @@
+# Code originally from Demo code distributed with Python 2.6
 # Sun RPC version 2 -- RFC1057.
 
 # XXX There should be separate exceptions for the various reasons why

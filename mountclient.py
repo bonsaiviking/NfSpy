@@ -1,3 +1,4 @@
+# Unmodified code distributed with Python 2.6
 # Mount RPC client -- RFC 1094 (NFS), Appendix A
 
 # This module demonstrates how to write your own RPC client in Python.
