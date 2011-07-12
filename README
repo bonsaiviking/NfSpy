@@ -66,7 +66,10 @@ $ showmount -e 192.168.1.124
 Export list for 192.168.1.124:
 /home (everyone)
 
-Mount up the share.
+Mount up the share. Using sudo lets you bind to a privileged port, and the 
+allow_other option lets any user use the filesystem. The other new option here
+is "hide", which immediately "unmounts" the share on the server, but keeps the 
+filehandle it got. This hides your presence from anyone using showmount -a
 
 $ sudo nfspy -o server=192.168.1.124:/home,hide,allow_other,ro,intr /mnt
 
@@ -81,3 +84,12 @@ drwx------ 74 8888 200 4096 2011-03-03 09:55 smithj
 Proc-Type: 4,ENCRYPTED
 DEK-Info: DES-EDE3-CBC,30ADB54EE502CA1A
 <snip>
+
+To unmount, use fusermount:
+
+$ sudo fusermount -u /mnt
+
+BUGS
+
+o NfSpy mounts read-only for now. The write-related methods will be
+  written later.
