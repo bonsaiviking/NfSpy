@@ -10,5 +10,5 @@ setup( name='NfSpy',
         url='https://github.com/bonsaiviking/NfSpy',
         packages=['nfspy'],
         requires=['fuse'],
-        scripts=['nfspy/nfspy.py'],
+        scripts=['nfspy/nfspy'],
         )
