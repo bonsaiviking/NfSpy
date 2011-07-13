@@ -91,19 +91,19 @@ class NFSPacker(MountPacker):
         self.pack_timeval(mtime)
 
     def pack_renameargs(self, ra):
-        fromdir, fromname, todir, toname = da
+        fromdir, fromname, todir, toname = ra
         self.pack_fhandle(fromdir)
         self.pack_string(fromname)
         self.pack_fhandle(todir)
         self.pack_string(toname)
 
     def pack_linkargs(self, la):
-        fromhandle, todir, toname = da
+        fromhandle, todir, toname = la
         self.pack_fhandle(fromhandle)
         self.pack_fhandle(todir)
         self.pack_string(toname)
 
-    def pack_symlinkargs(self, ra):
+    def pack_symlinkargs(self, sa):
         fromdir, fromname, to, mode, uid, gid, size, atime, mtime = sa
         self.pack_fhandle(fromdir)
         self.pack_string(fromname)
@@ -290,12 +290,12 @@ class NFSClient(UDPClient):
     def Link(self, la):
         return self.make_call(12, la, \
             self.packer.pack_linkargs, \
-            self.packer.unpack_enum)
+            self.unpacker.unpack_enum)
 
     def Symlink(self, sa):
         return self.make_call(13, sa, \
             self.packer.pack_symlinkargs, \
-            self.packer.unpack_enum)
+            self.unpacker.unpack_enum)
 
     def Mkdir(self, ca):
         return self.make_call(14, ca, \
