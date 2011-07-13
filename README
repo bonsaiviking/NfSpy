@@ -93,3 +93,8 @@ BUGS
 
 o NfSpy mounts read-only for now. The write-related methods will be
   written later.
+
+o NfSpy is an NFSv2 client using TCP transport. As such, it will probably only
+  work with NFSv3 servers which allow NFSv2 connections. NFSv2 is very old, and 
+  some servers may not support it. Future releases will support NFSv3, but
+  probably not NFSv4.
