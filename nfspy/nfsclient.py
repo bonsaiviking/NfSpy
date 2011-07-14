@@ -241,6 +241,20 @@ class NFSUnpacker(MountUnpacker):
         else:
             rest = None
         return status, rest
+import sys
+def check_status(procedure):
+    def wrapped(*args, **kwargs):
+        ret = procedure(*args, **kwargs)
+        if isinstance(ret, tuple):
+            status, ret = ret
+        else:
+            status = ret
+            ret = None
+        if status <> NFS_OK:
+            raise NFSError(status)
+        else:
+            return ret
+    return wrapped
 
 class NFSClient(UDPClient):
     def __init__(self, host):
@@ -269,11 +283,13 @@ class NFSClient(UDPClient):
             self.cred = rpc.AUTH_UNIX, rpc.make_auth_unix_default()
         return self.cred
 
+    @check_status
     def Getattr(self, fh):
         return self.make_call(1, fh, \
                 self.packer.pack_fhandle, \
                 self.unpacker.unpack_attrstat)
 
+    @check_status
     def Setattr(self, sa):
         return self.make_call(2, sa, \
                 self.packer.pack_sattrargs, \
@@ -281,16 +297,19 @@ class NFSClient(UDPClient):
 
     # Root() is obsolete
 
+    @check_status
     def Lookup(self, da):
         return self.make_call(4, da, \
                 self.packer.pack_diropargs, \
                 self.unpacker.unpack_diropres)
 
+    @check_status
     def Readlink(self, fh):
         return self.make_call(5, fh, \
             self.packer.pack_fhandle, \
             self.unpacker.unpack_readlinkres)
 
+    @check_status
     def Read(self, ra):
         return self.make_call(6, ra, \
             self.packer.pack_readargs, \
@@ -298,51 +317,61 @@ class NFSClient(UDPClient):
 
     # NFSPROC_WRITECACHE() "to be used in the next protocol revision"
 
+    @check_status
     def Write(self, wa):
         return self.make_call(8, wa, \
             self.packer.pack_writeargs, \
             self.unpacker.unpack_attrstat)
 
+    @check_status
     def Create(self, ca):
         return self.make_call(9, ca, \
             self.packer.pack_createargs, \
             self.unpacker.unpack_diropres)
 
+    @check_status
     def Remove(self, da):
         return self.make_call(10, da, \
             self.packer.pack_diropargs, \
             self.unpacker.unpack_enum)
 
+    @check_status
     def Rename(self, ra):
         return self.make_call(11, ra, \
             self.packer.pack_renameargs, \
             self.unpacker.unpack_enum)
 
+    @check_status
     def Link(self, la):
         return self.make_call(12, la, \
             self.packer.pack_linkargs, \
             self.unpacker.unpack_enum)
 
+    @check_status
     def Symlink(self, sa):
         return self.make_call(13, sa, \
             self.packer.pack_symlinkargs, \
             self.unpacker.unpack_enum)
 
+    @check_status
     def Mkdir(self, ca):
         return self.make_call(14, ca, \
             self.packer.pack_createargs, \
             self.unpacker.unpack_diropres)
 
+    @check_status
     def Rmdir(self, da):
         return self.make_call(15, da, \
             self.packer.pack_diropargs, \
             self.unpacker.unpack_enum)
 
+    @check_status
     def Readdir(self, ra):
         return self.make_call(16, ra, \
                 self.packer.pack_readdirargs, \
                 self.unpacker.unpack_readdirres)
 
+    @check_status
     def Statfs(self, fh):
         return self.make_call(17, fh, \
             self.packer.pack_fhandle, \
@@ -353,10 +382,7 @@ class NFSClient(UDPClient):
         list = []
         ra = (dir, 0, tsize)
         while 1:
-            (status, rest) = self.Readdir(ra)
-            if status <> NFS_OK:
-                break
-            entries, eof = rest
+            entries, eof = self.Readdir(ra)
             last_cookie = None
             for fileid, name, cookie in entries:
                 list.append((fileid, name))
