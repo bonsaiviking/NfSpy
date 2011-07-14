@@ -17,37 +17,6 @@ from lrucache import LRU
 
 fuse.fuse_python_api = (0, 2)
 
-class NFSError(Exception):
-    def __init__(self,value):
-        self.lookup = {
-            NFSERR_PERM        : EPERM,
-            NFSERR_NOENT       : ENOENT,
-            NFSERR_IO          : EIO,
-            NFSERR_NXIO        : ENXIO,
-            NFSERR_ACCES       : EACCES,
-            NFSERR_EXIST       : EEXIST,
-            NFSERR_NODEV       : ENODEV,
-            NFSERR_NOTDIR      : ENOTDIR,
-            NFSERR_ISDIR       : EISDIR,
-            NFSERR_FBIG        : EFBIG,
-            NFSERR_NOSPC       : ENOSPC,
-            NFSERR_ROFS        : EROFS,
-            NFSERR_NAMETOOLONG : ENAMETOOLONG,
-            NFSERR_NOTEMPTY    : ENOTEMPTY,
-            NFSERR_DQUOT       : EDQUOT,
-            NFSERR_STALE       : ESTALE
-        }
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-    def errno(self):
-        try:
-            err = self.lookup[self.value]
-        except KeyError:
-            err = self.value
-        return err
-
-
 class NFSStat(fuse.Stat):
     def __init__(self):
         self.st_mode = 0

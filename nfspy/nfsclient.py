@@ -4,6 +4,8 @@
 import rpc
 from rpc import UDPClient, TCPClient
 from mountclient import FHSIZE, MountPacker, MountUnpacker
+import errno
+import os
 
 NFS_PROGRAM = 100003
 NFS_VERSION = 2
@@ -27,6 +29,35 @@ NFSERR_NOTEMPTY=66
 NFSERR_DQUOT=69
 NFSERR_STALE=70
 NFSERR_WFLUSH=99
+
+class NFSError(Exception):
+    lookup = {
+        NFSERR_PERM        : errno.EPERM,
+        NFSERR_NOENT       : errno.ENOENT,
+        NFSERR_IO          : errno.EIO,
+        NFSERR_NXIO        : errno.ENXIO,
+        NFSERR_ACCES       : errno.EACCES,
+        NFSERR_EXIST       : errno.EEXIST,
+        NFSERR_NODEV       : errno.ENODEV,
+        NFSERR_NOTDIR      : errno.ENOTDIR,
+        NFSERR_ISDIR       : errno.EISDIR,
+        NFSERR_FBIG        : errno.EFBIG,
+        NFSERR_NOSPC       : errno.ENOSPC,
+        NFSERR_ROFS        : errno.EROFS,
+        NFSERR_NAMETOOLONG : errno.ENAMETOOLONG,
+        NFSERR_NOTEMPTY    : errno.ENOTEMPTY,
+        NFSERR_DQUOT       : errno.EDQUOT,
+        NFSERR_STALE       : errno.ESTALE
+    }
+    def __init__(self,value=None):
+        self.value = value
+    def __str__(self):
+        try:
+            return os.strerror(lookup[self.value])
+        except KeyError:
+            return "NFS Error"
+    def errno(self):
+        return self.value
 
 # enum ftype
 NFNON = 0
