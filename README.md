@@ -1,6 +1,6 @@
 NfSpy - an ID-spoofing NFS client
 =================================
-by [Daniel Miller](mailto:bonsaiviking@gmail.com)
+by [Daniel Miller](https://github.com/bonsaiviking)
 
 NfSpy is a library/program that uses the Filesystem in Userspace (FUSE)
 library to automate the falsification of NFS credentials when mounting an NFS
