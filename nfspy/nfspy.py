@@ -90,39 +90,51 @@ class NFSFuse(fuse.Fuse):
         self.handles = None
 
     def main(self):
+        class FakeUmnt:
+            """
+            To avoid multiple calls to mountclient.Umnt, set self.mcl = FakeUmnt()
+            """
+            def Umnt(path):
+                pass
+
         if hasattr(self,"server"):
             self.host, self.path = self.server.split(':',1);
         else:
             raise fuse.FuseError, "No server specified"
 
-        port = self.mountport.split('/',1)
-        proto = "udp"
-        if len(port) == 2:
-            port, proto = port
+        if hasattr(self,"dirhandle"):
+            self.mcl = FakeUmnt()
+            self.rootdh = self.dirhandle.decode('string_escape')
         else:
-            port = port[0]
-        try:
-            port = int(port)
-        except ValueError:
-            port = None
-        try:
-            if proto == "udp":
-                self.mcl = FallbackUDPMountClient(self.host, port)
-            elif proto == "tcp":
-                self.mcl = FallbackTCPMountClient(self.host, port)
+            port = self.mountport.split('/',1)
+            proto = "udp"
+            if len(port) == 2:
+                port, proto = port
             else:
-                raise fuse.FuseError, "Invalid mount transport: %s" % proto
-        except socket.error as e:
-            sys.stderr.write("Problem mounting to %s:%s/%s: %s\n"
-                    % (self.host, repr(port), proto, os.strerror(e.errno)))
-            exit(1)
+                port = port[0]
+            try:
+                port = int(port)
+            except ValueError:
+                port = None
+            try:
+                if proto == "udp":
+                    self.mcl = FallbackUDPMountClient(self.host, port)
+                elif proto == "tcp":
+                    self.mcl = FallbackTCPMountClient(self.host, port)
+                else:
+                    raise fuse.FuseError, "Invalid mount transport: %s" % proto
+            except socket.error as e:
+                sys.stderr.write("Problem mounting to %s:%s/%s: %s\n"
+                        % (self.host, repr(port), proto, os.strerror(e.errno)))
+                exit(1)
 
-        status, dirhandle = self.mcl.Mnt(self.path)
-        if status <> 0:
-            raise IOError(status, os.strerror(status), self.path)
-        if hasattr(self,"hide"):
-            self.mcl.Umnt(self.path)
-        self.rootdh = dirhandle
+            status, dirhandle = self.mcl.Mnt(self.path)
+            if status <> 0:
+                raise IOError(status, os.strerror(status), self.path)
+            if hasattr(self,"hide"):
+                self.mcl.Umnt(self.path)
+                self.mcl = FakeUmnt()
+            self.rootdh = dirhandle
 
         port = self.nfsport.split('/',1)
         proto = "udp"
@@ -147,7 +159,6 @@ class NFSFuse(fuse.Fuse):
             exit(1)
 
         self.ncl.fuid = self.ncl.fgid = 0
-        sys.stderr.write("getting attr\n")
         fattr = self.ncl.Getattr(self.rootdh)
         self.rootattr = fattr
         self.ncl.fuid = self.rootattr[3]
@@ -549,8 +560,7 @@ class NFSFuse(fuse.Fuse):
     #'fsinit'
     #'fsdestroy'
     def fsdestroy(self):
-        if not hasattr(self,"hide"):
-            self.mcl.Umnt(self.path)
+        self.mcl.Umnt(self.path)
 
 
 class NFSStatVfs(fuse.StatVfs):
@@ -573,6 +583,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
     server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
     server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
+    server.parser.add_option(mountopt='dirhandle',metavar='ESCAPED_STRING',help='Use a \\x-escaped-string representation of a directory handle instead of using mountd')
     server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
     server.parse(values=server, errex=1)
     server.main()
