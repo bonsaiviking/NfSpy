@@ -7,15 +7,44 @@ import sys
 import rpc
 import fuse
 from errno import *
-from socket import gethostname
+import socket
 from time import time
 from nfsclient import *
-from mountclient import TCPMountClient,UDPMountClient
+from mountclient import PartialMountClient, MOUNTPROG, MOUNTVERS
 import os
 from threading import Lock
 from lrucache import LRU
 
 fuse.fuse_python_api = (0, 2)
+
+class FallbackUDPClient(rpc.RawUDPClient):
+    def __init__(self, host, prog, vers, port=None):
+        if port is None:
+            pmap = rpc.UDPPortMapperClient(host)
+            port = pmap.Getport((prog, vers, rpc.IPPROTO_UDP, 0))
+            pmap.close()
+            if port == 0:
+                raise RuntimeError, 'program not registered'
+        rpc.RawUDPClient.__init__(self, host, prog, vers, port)
+
+class FallbackTCPClient(rpc.RawTCPClient):
+    def __init__(self, host, prog, vers, port=None):
+        if port is None:
+            pmap = rpc.TCPPortMapperClient(host)
+            port = pmap.Getport((prog, vers, rpc.IPPROTO_TCP, 0))
+            pmap.close()
+            if port == 0:
+                raise RuntimeError, 'program not registered'
+        rpc.RawTCPClient.__init__(self, host, prog, vers, port)
+
+class FallbackTCPMountClient(PartialMountClient, FallbackTCPClient):
+    def __init__(self, host, port=None):
+        FallbackTCPClient.__init__(self, host, MOUNTPROG, MOUNTVERS, port)
+
+
+class FallbackUDPMountClient(PartialMountClient, FallbackUDPClient):
+    def __init__(self, host, port=None):
+        FallbackUDPClient.__init__(self, host, MOUNTPROG, MOUNTVERS, port)
 
 class NFSStat(fuse.Stat):
     def __init__(self):
@@ -30,30 +59,19 @@ class NFSStat(fuse.Stat):
         self.st_mtime = 0
         self.st_ctime = 0
 
-class EvilNFSClient(NFSClient):
+class EvilNFSClient(PartialNFSClient):
     def mkcred(self):
         self.cred = rpc.AUTH_UNIX, rpc.make_auth_unix(int(time()),
-            gethostname(), self.fuid, self.fgid, [])
+            socket.gethostname(), self.fuid, self.fgid, [])
         return self.cred
 
-# I don't think this needs to be overridden
-#    def Listdir(self, dir, tsize):
-#        list = []
-#        ra = (dir, 0, tsize)
-#        while 1:
-#            (status, rest) = self.Readdir(ra)
-#            if status <> NFS_OK:
-#                raise NFSError(status)
-#            entries, eof = rest
-#            last_cookie = None
-#            for fileid, name, cookie in entries:
-#                list.append((fileid, name))
-#                last_cookie = cookie
-#            if eof or last_cookie is None:
-#                break
-#            ra = (ra[0], last_cookie, ra[2])
-#        return list
+class EvilFallbackTCPNFSClient(EvilNFSClient, FallbackTCPClient):
+    def __init__(self, host, port=None):
+        FallbackTCPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION, port)
 
+class EvilFallbackUDPNFSClient(EvilNFSClient, FallbackUDPClient):
+    def __init__(self, host, port=None):
+        FallbackUDPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION, port)
 
 class NFSNode(object):
     def __init__(self):
@@ -66,22 +84,38 @@ class NFSFuse(fuse.Fuse):
         self.authlock = Lock()
         self.cachetimeout = 30 # seconds
         self.cache = 1024
+        self.mountport = "udp"
+        self.nfsport = "udp"
         self.mcl = None
         self.handles = None
 
     def main(self):
-        return fuse.Fuse.main(self)
-
-    def fsinit(self):
         if hasattr(self,"server"):
             self.host, self.path = self.server.split(':',1);
         else:
             raise fuse.FuseError, "No server specified"
 
-        if hasattr(self,"udpmount"):
-            self.mcl = UDPMountClient(self.host)
+        port = self.mountport.split('/',1)
+        proto = "udp"
+        if len(port) == 2:
+            port, proto = port
         else:
-            self.mcl = TCPMountClient(self.host)
+            port = port[0]
+        try:
+            port = int(port)
+        except ValueError:
+            port = None
+        try:
+            if proto == "udp":
+                self.mcl = FallbackUDPMountClient(self.host, port)
+            elif proto == "tcp":
+                self.mcl = FallbackTCPMountClient(self.host, port)
+            else:
+                raise fuse.FuseError, "Invalid mount transport: %s" % proto
+        except socket.error as e:
+            sys.stderr.write("Problem mounting to %s:%s/%s: %s\n"
+                    % (self.host, repr(port), proto, os.strerror(e.errno)))
+            exit(1)
 
         status, dirhandle = self.mcl.Mnt(self.path)
         if status <> 0:
@@ -89,8 +123,31 @@ class NFSFuse(fuse.Fuse):
         if hasattr(self,"hide"):
             self.mcl.Umnt(self.path)
         self.rootdh = dirhandle
-        self.ncl = EvilNFSClient(self.host)
+
+        port = self.nfsport.split('/',1)
+        proto = "udp"
+        if len(port) == 2:
+            port, proto = port
+        else:
+            port = port[0]
+        try:
+            port = int(port)
+        except ValueError:
+            port = None
+        try:
+            if proto == "udp":
+                self.ncl = EvilFallbackUDPNFSClient(self.host, port)
+            elif proto == "tcp":
+                self.ncl = EvilFallbackTCPNFSClient(self.host, port)
+            else:
+                raise fuse.FuseError, "Invalid NFS transport: %s" % proto
+        except socket.error as e:
+            sys.stderr.write("Problem establishing NFS to %s:%s/%s: %s\n"
+                    % (self.host, repr(port), proto, os.strerror(e.errno)))
+            exit(1)
+
         self.ncl.fuid = self.ncl.fgid = 0
+        sys.stderr.write("getting attr\n")
         fattr = self.ncl.Getattr(self.rootdh)
         self.rootattr = fattr
         self.ncl.fuid = self.rootattr[3]
@@ -100,9 +157,11 @@ class NFSFuse(fuse.Fuse):
         self.tsize = rest[0]
         if not self.tsize:
             self.tsize = 4096
-        sys.stderr.write("cache = %d\ntimeout = %d" % (self.cache,self.cachetimeout))
         self.handles = LRU(self.cache)
+        return fuse.Fuse.main(self)
 
+    def fsinit(self):
+        pass
 
     def _gethandle(self, dh, elem):
         dh, fattr = self.ncl.Lookup((dh, elem))
@@ -510,9 +569,11 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='server',metavar='HOST:PATH',
         help='connect to server HOST:PATH')
     server.parser.add_option(mountopt='hide',action='store_true',help='Immediately unmount from the server, staying mounted on the client')
+    # subbedopts doesn't support "default" kwarg. Leaving it in anyway for clarity, but it gets set in NFSFuse.main()
     server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
     server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
-    server.parser.add_option(mountopt='udpmount',action='store_true',help='Use UDP transport for mount operation')
+    server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
+    server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
     server.parse(values=server, errex=1)
     server.main()
 

@@ -256,11 +256,17 @@ def check_status(procedure):
             return ret
     return wrapped
 
-class NFSClient(UDPClient):
+class UDPNFSClient(UDPClient):
     def __init__(self, host):
         UDPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION)
-    #def __init__(self, host):
-        #raise RuntimeError, 'Must use UDPNFSClient or TCPNFSClient'
+
+class TCPNFSClient(TCPClient):
+    def __init__(self, host):
+        TCPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION)
+
+class PartialNFSClient:
+    def __init__(self, host):
+        raise RuntimeError, 'Must use UDPNFSClient or TCPNFSClient'
 
     def bindsocket(self):
         import os
@@ -392,11 +398,11 @@ class NFSClient(UDPClient):
             ra = (ra[0], last_cookie, ra[2])
         return list
 
-class TCPNFSClient(TCPClient,NFSClient):
+class TCPNFSClient(TCPClient,PartialNFSClient):
     def __init__(self, host):
         TCPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION)
 
-class UDPNFSClient(UDPClient,NFSClient):
+class UDPNFSClient(UDPClient,PartialNFSClient):
     def __init__(self, host):
         UDPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION)
 
@@ -417,7 +423,7 @@ def test():
     print sf
     fh = sf[1]
     if fh:
-        ncl = NFSClient(host)
+        ncl = UDPNFSClient(host)
         attrstat = ncl.Getattr(fh)
         print "gotattrs\n"
         print attrstat
