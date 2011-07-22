@@ -169,6 +169,14 @@ class NFSFuse(fuse.Fuse):
         if not self.tsize:
             self.tsize = 4096
         self.handles = LRU(self.cache)
+
+        if hasattr(self,"getroot"):
+            handle, attr = self.gethandle("/..")
+            while handle != self.rootdh:
+                self.rootdh = handle
+                self.rootattr = attr
+                handle, attr = self.gethandle("/..")
+
         return fuse.Fuse.main(self)
 
     def fsinit(self):
@@ -584,6 +592,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
     server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
     server.parser.add_option(mountopt='dirhandle',metavar='ESCAPED_STRING',help='Use a \\x-escaped-string representation of a directory handle instead of using mountd')
+    server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')
     server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
     server.parse(values=server, errex=1)
     server.main()
