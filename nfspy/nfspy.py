@@ -82,7 +82,7 @@ class NFSFuse(fuse.Fuse):
         fuse.Fuse.__init__(self, *args, **kw)
         self.fuse_args.add("ro", True)
         self.authlock = Lock()
-        self.cachetimeout = 30 # seconds
+        self.cachetimeout = 120 # seconds
         self.cache = 1024
         self.mountport = "udp"
         self.nfsport = "udp"
@@ -183,32 +183,39 @@ class NFSFuse(fuse.Fuse):
     def fsinit(self):
         pass
 
-    def _gethandle(self, dh, elem):
-        dh, fattr = self.ncl.Lookup((dh, elem))
-        self.ncl.fuid = fattr[3]
-        self.ncl.fgid = fattr[4]
+    def _gethandle(self, path):
+        dh = None
+        fattr = None
+        try:
+            if path == "" or path == "/":
+                dh = self.rootdh
+                fattr = self.rootattr
+            else:
+                dh, fattr, cachetime = self.handles[path]
+            # check that it isn't stale
+            self.ncl.fuid = fattr[3]
+            self.ncl.fgid = fattr[4]
+            fattr = self.ncl.Getattr(dh)
+        except (KeyError,NFSError) as e:
+            if isinstance(e, KeyError) or e.errno() == NFSERR_STALE:
+                if isinstance(e, NFSError):
+                    del self.handles[path]
+                tmppath, elem = path.rsplit("/",1)
+                dh, fattr = self.gethandle(tmppath)
+                self.ncl.fuid = fattr[3]
+                self.ncl.fgid = fattr[4]
+                dh, fattr = self.ncl.Lookup((dh, elem))
+                self.ncl.fuid = fattr[3]
+                self.ncl.fgid = fattr[4]
+                self.handles[path] = (dh, fattr, time())
+            else:
+                raise
         return (dh, fattr)
 
     def gethandle(self, path):
-        elements = path.split("/")
-        elements = filter(lambda x: x != '', elements)
         now = time()
         self.handles.prune(lambda x: now - x[2] > self.cachetimeout)
-        dh = self.rootdh
-        fattr = self.rootattr
-        self.ncl.fuid = fattr[3]
-        self.ncl.fgid = fattr[4]
-        tmppath = ""
-        for elem in elements:
-            tmppath += "/" + elem
-            try:
-                dh, fattr, cachetime = self.handles[tmppath]
-            except KeyError:
-                dh, fattr = self._gethandle(dh, elem)
-                self.handles[tmppath] = (dh, fattr, now)
-            self.ncl.fuid = fattr[3]
-            self.ncl.fgid = fattr[4]
-        return (dh, fattr)
+        return self._gethandle(path)
 
     #'getattr'
     def getattr(self, path):
@@ -589,8 +596,8 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
         help='connect to server HOST:PATH')
     server.parser.add_option(mountopt='hide',action='store_true',help='Immediately unmount from the server, staying mounted on the client')
     # subbedopts doesn't support "default" kwarg. Leaving it in anyway for clarity, but it gets set in NFSFuse.main()
-    server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
-    server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
+    server.parser.add_option(mountopt='cache',type="int",default=1024,help='Number of handles to cache')
+    server.parser.add_option(mountopt='cachetimeout',type="int",default=120,help='Timeout on handle cache')
     server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
     server.parser.add_option(mountopt='dirhandle',metavar='00:AA:BB...',help='Use a colon-separated hex bytes representation of a directory handle instead of using mountd')
     server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')

@@ -87,13 +87,7 @@ class LRU:
                 cur2.prev = None
             del self.d[cur.me[0]]
             cur = cur2
-        if cur is None:
-            self.first = None
-            return count
-        self.first = cur.next
-        if cur.next:
-            cur.next.prev = None
-        else:
-            self.last = None
-        del self.d[cur.me[0]]
-        return count + 1
+        self.first = cur
+        if cur is None or cur.next is None:
+            self.last = cur
+        return count
