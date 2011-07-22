@@ -91,17 +91,39 @@ To unmount, use fusermount:
 
     $ sudo fusermount -u /mnt
 
+### Advanced example
+
+There is an NFS server on 192.168.1.124. Portmap is blocked, so you can't get a list of shares, but you can sniff the network traffic.
+
+    $ sudo tshark -n -i eth0 -T fields -e nfs.fhandle
+    Running as user "root" and group "root". This could be dangerous.
+    Capturing on eth0
+    01:00:04:00:01:00:22:00:e5:03:d8:9d:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00
+    01:00:04:01:01:00:22:00:e5:03:d8:9d:07:00:22:00:15:83:74:d5:00:00:00:00:00:00:00:00:00:00:00:00
+    01:00:04:01:01:00:22:00:e5:03:d8:9d:07:00:22:00:15:83:74:d5:00:00:00:00:00:00:00:00:00:00:00:00
+    
+    ^C3 packets captured
+
+Now use the dirhandle and getroot mount options to avoid using the mount
+daemon, and use the nfsport option to avoid using the portmapper, traversing
+up the directory tree to the root of the export. 
+
+    $ sudo nfspy -o rw,server=192.168.1.124:,nfsport=2049/udp,dirhandle=01:00:04:01:01:00:22:00:e5:03:d8:9d:07:00:22:00:15:83:74:d5:00:00:00:00:00:00:00:00:00:00:00:00,getroot mnt
+
+Note that we didn't provide a path to mount, since all we know is the nfs
+filehandle.
+
+
 BUGS
 ----
 
-* NfSpy mounts read-only for now. The write-related methods will be
-  written later.
+* Write access is beta. It has worked in my tests on a handful of systems,
+  but could use more testing. Because of this, NfSpy defaults to mounting
+  ro. Specify the rw mount option to change this.
 
-* NfSpy is an NFSv2 client using TCP transport. As such, it will probably only
-  work with NFSv3 servers which allow NFSv2 connections. NFSv2 is very old, and 
-  some servers may not support it. Future releases will support NFSv3, but
-  probably not NFSv4.
+* NfSpy is an NFSv2 client. NFSv2 is very old, and some servers may not
+  support it. Future releases may support NFSv3, but probably not NFSv4.
 
 * NfSpy does not work with the standard lockd and statd services, which could
-  cause problems when write support is added. For read-only, though, and most
+  cause problems with writing to files. For read-only, though, and most
   nefarious uses for which it was intended, this shouldn't be a problem.

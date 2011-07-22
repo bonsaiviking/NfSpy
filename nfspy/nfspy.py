@@ -104,7 +104,8 @@ class NFSFuse(fuse.Fuse):
 
         if hasattr(self,"dirhandle"):
             self.mcl = FakeUmnt()
-            self.rootdh = self.dirhandle.decode('string_escape')
+            self.rootdh = ''.join( map( lambda x: chr(int(x,16)),
+                    self.dirhandle.split(':')))
         else:
             port = self.mountport.split('/',1)
             proto = "udp"
@@ -591,7 +592,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='cache',type="int",default=100,help='Number of handles to cache')
     server.parser.add_option(mountopt='cachetimeout',type="int",default=30,help='Timeout on handle cache')
     server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
-    server.parser.add_option(mountopt='dirhandle',metavar='ESCAPED_STRING',help='Use a \\x-escaped-string representation of a directory handle instead of using mountd')
+    server.parser.add_option(mountopt='dirhandle',metavar='00:AA:BB...',help='Use a colon-separated hex bytes representation of a directory handle instead of using mountd')
     server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')
     server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
     server.parse(values=server, errex=1)
