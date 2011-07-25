@@ -124,7 +124,7 @@ class NFSFuse(fuse.Fuse):
                     self.mcl = FallbackTCPMountClient(self.host, port)
                 else:
                     raise fuse.FuseError, "Invalid mount transport: %s" % proto
-            except socket.error as e:
+            except socket.error, e:
                 sys.stderr.write("Problem mounting to %s:%s/%s: %s\n"
                         % (self.host, repr(port), proto, os.strerror(e.errno)))
                 exit(1)
@@ -154,7 +154,7 @@ class NFSFuse(fuse.Fuse):
                 self.ncl = EvilFallbackTCPNFSClient(self.host, port)
             else:
                 raise fuse.FuseError, "Invalid NFS transport: %s" % proto
-        except socket.error as e:
+        except socket.error, e:
             sys.stderr.write("Problem establishing NFS to %s:%s/%s: %s\n"
                     % (self.host, repr(port), proto, os.strerror(e.errno)))
             exit(1)
@@ -196,7 +196,7 @@ class NFSFuse(fuse.Fuse):
             self.ncl.fuid = fattr[3]
             self.ncl.fgid = fattr[4]
             fattr = self.ncl.Getattr(dh)
-        except (KeyError,NFSError) as e:
+        except (KeyError,NFSError), e:
             if isinstance(e, KeyError) or e.errno() == NFSERR_STALE:
                 if isinstance(e, NFSError):
                     del self.handles[path]
@@ -225,7 +225,7 @@ class NFSFuse(fuse.Fuse):
             rest = self.ncl.Getattr(handle)
             fattr = rest
             self.handles[path] = (handle, fattr, time())
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -248,7 +248,7 @@ class NFSFuse(fuse.Fuse):
             if fattr[0] != NFLNK:
                 raise IOError(EINVAL, os.strerror(EINVAL), path)
             rest = self.ncl.Readlink(handle)
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -261,7 +261,7 @@ class NFSFuse(fuse.Fuse):
         try:
             handle, fattr = self.gethandle(path)
             entries = (fuse.Direntry(dir[1]) for dir in self.ncl.Listdir(handle, self.tsize))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -282,7 +282,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(dirpath)
             handle, fattr = self.ncl.Create(
                     (handle, name, mode, fattr[3], fattr[4], 0, t, t))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -301,7 +301,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(dirpath)
             handle, fattr = self.ncl.Mkdir(
                     (handle, name, mode, fattr[3], fattr[4], 0, t, t))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -320,7 +320,7 @@ class NFSFuse(fuse.Fuse):
             if fattr[0] == NFDIR:
                 raise IOError(EISDIR, os.strerror(EISDIR), path)
             self.ncl.Remove((handle, name))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -338,7 +338,7 @@ class NFSFuse(fuse.Fuse):
             if fattr[0] != NFDIR:
                 raise IOError(ENOTDIR, os.strerror(ENOTDIR), path)
             self.ncl.Rmdir((handle, name))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -355,7 +355,7 @@ class NFSFuse(fuse.Fuse):
             handle, _ = self.gethandle(dirpath)
             self.ncl.Symlink((handle, name, target, 0777,
                 self.ncl.fuid, self.ncl.fgid, 0, t, t))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -374,13 +374,13 @@ class NFSFuse(fuse.Fuse):
             self.gethandle(old) # to get appropriate fuid/fgid
             try:
                 self.ncl.Rename((fromhandle, fromname, tohandle, toname))
-            except NFSError as e:
+            except NFSError, e:
                 if e.value == NFSERR_ACCES:
                     self.gethandle(topath) #try different permissions
                     self.ncl.Rename((fromhandle, fromname, tohandle, toname))
                 else:
                     raise e
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -396,7 +396,7 @@ class NFSFuse(fuse.Fuse):
             fromhandle, _ = self.gethandle(target)
             todir, _ = self.gethandle(dirpath)
             self.ncl.Link((fromhandle, todir, name))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -411,7 +411,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             fattr = self.ncl.Setattr((handle,
                 (mode, -1, -1, -1, (-1,-1), (-1,-1)) ))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -427,7 +427,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             fattr = self.ncl.Setattr((handle,
                 (-1, uid, gid, -1, (-1, -1), (-1, -1)) ))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -443,7 +443,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             fattr = self.ncl.Setattr((handle,
                 (-1, -1, -1, size, (-1,-1), (-1,-1)) ))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -460,7 +460,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             fattr = self.ncl.Setattr((handle,
                 (-1, -1, -1, -1, (atime,0), (mtime,0)) ))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
@@ -479,7 +479,7 @@ class NFSFuse(fuse.Fuse):
         try:
             handle, fattr = self.gethandle(path)
             fattr, data = self.ncl.Read((handle, offset, size, 0))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -497,7 +497,7 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             size = fattr[5]
             fattr = self.ncl.Write((handle, 0, offset, 0, buf))
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
@@ -530,7 +530,7 @@ class NFSFuse(fuse.Fuse):
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
-        except NFSError as e:
+        except NFSError, e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
