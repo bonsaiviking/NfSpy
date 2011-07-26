@@ -4,7 +4,9 @@ by [Daniel Miller](https://github.com/bonsaiviking)
 
 NfSpy is a library/program that uses the Filesystem in Userspace (FUSE)
 library to automate the falsification of NFS credentials when mounting an NFS
-share.
+share. The 'twofour' branch is intended to support Python 2.4. It will not
+receive future updates to functionality, so updating to Python 2.6 and the
+master branch of NfSpy is encouraged.
 
 Vulnerability exploited
 -----------------------
