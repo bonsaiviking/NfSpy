@@ -213,8 +213,10 @@ class NFSFuse(fuse.Fuse):
         return (dh, fattr)
 
     def gethandle(self, path):
-        now = time()
-        self.handles.prune(lambda x: now - x[2] > self.cachetimeout)
+        if len(self.handles.d) >= self.handles.count:
+            # only prune if cache is full, since prune is O(N)
+            now = time()
+            self.handles.prune(lambda x: now - x[2] > self.cachetimeout)
         return self._gethandle(path)
 
     #'getattr'
