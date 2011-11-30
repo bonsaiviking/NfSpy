@@ -172,11 +172,15 @@ class NFSFuse(fuse.Fuse):
         self.handles = LRU(self.cache)
 
         if hasattr(self,"getroot"):
-            handle, attr = self.gethandle("/..")
-            while handle != self.rootdh:
-                self.rootdh = handle
-                self.rootattr = attr
+            try:
                 handle, attr = self.gethandle("/..")
+                while handle != self.rootdh:
+                    self.rootdh = handle
+                    self.rootattr = attr
+                    handle, attr = self.gethandle("/..")
+            except NFSError as e:
+                if e.value != NFSERR_NOENT:
+                    raise
 
         return fuse.Fuse.main(self)
 
