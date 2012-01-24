@@ -11,7 +11,7 @@
 
 
 import rpc
-from rpc import Packer, Unpacker, TCPClient, UDPClient
+from rpc import Packer, Unpacker, TCPClient, UDPClient, UDPPortMapperClient
 
 
 # Program number and version for the mount protocol
@@ -20,6 +20,7 @@ MOUNTVERS = 1
 
 # Size of the 'fhandle' opaque structure
 FHSIZE = 32
+FHSIZE3 = 64
 
 
 # Packer derived class for Mount protocol clients.
@@ -30,6 +31,9 @@ class MountPacker(Packer):
     def pack_fhandle(self, fhandle):
         self.pack_fopaque(FHSIZE, fhandle)
 
+class Mount3Packer(Packer):
+    def pack_fhandle(self, fhandle):
+        self.pack_fopaque(FHSIZE3, fhandle)
 
 # Unpacker derived class for Mount protocol clients.
 # The important types we need to unpack are fhandle, fhstatus,
@@ -70,6 +74,19 @@ class MountUnpacker(Unpacker):
     def unpack_groups(self):
         return self.unpack_list(self.unpack_string)
 
+class Mount3Unpacker(MountUnpacker):
+    def unpack_fhandle(self):
+        return self.unpack_fopaque(FHSIZE3)
+
+    def unpack_fhstatus(self):
+        status = self.unpack_uint()
+        if status == 0:
+            fh = self.unpack_fhandle()
+            #Not sure how to use this:
+            auth_flavors = self.unpack_uint()
+        else:
+            fh = None
+        return status, fh, auth_flavors
 
 # These are the procedures specific to the Mount client class.
 # Think of this as a derived class of either TCPClient or UDPClient.
@@ -79,8 +96,12 @@ class PartialMountClient:
     # This method is called by Client.__init__ to initialize
     # self.packer and self.unpacker
     def addpackers(self):
-        self.packer = MountPacker()
-        self.unpacker = MountUnpacker('')
+        if self.version == 3:
+            self.packer = Mount3Packer()
+            self.unpacker = Mount3Unpacker('')
+        else:
+            self.packer = MountPacker()
+            self.unpacker = MountUnpacker('')
 
     # This method is called by Client.__init__ to bind the socket
     # to a particular network interface and port.  We use the
@@ -163,14 +184,15 @@ class PartialMountClient:
 
 class TCPMountClient(PartialMountClient, TCPClient):
 
-    def __init__(self, host):
-        TCPClient.__init__(self, host, MOUNTPROG, MOUNTVERS)
+    def __init__(self, host, vers=MOUNTVERS):
+        self.version = vers
+        TCPClient.__init__(self, host, MOUNTPROG, vers)
 
 
 class UDPMountClient(PartialMountClient, UDPClient):
 
-    def __init__(self, host):
-        UDPClient.__init__(self, host, MOUNTPROG, MOUNTVERS)
+    def __init__(self, host, vers=MOUNTVERS):
+        UDPClient.__init__(self, host, MOUNTPROG, vers)
 
 
 # A little test program for the Mount client.  This takes a host as
@@ -191,6 +213,7 @@ def test():
         C = UDPMountClient
     if sys.argv[1:]: host = sys.argv[1]
     else: host = ''
+    print "exports on %s" % host
     mcl = C(host)
     list = mcl.Export()
     for item in list:
@@ -201,3 +224,6 @@ def test():
             print 'Sorry'
             continue
         mcl.Umnt(item[0])
+
+if __name__=='__main__':
+    test()
