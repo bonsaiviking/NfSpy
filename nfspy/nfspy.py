@@ -12,6 +12,7 @@ from time import time
 from nfsclient import *
 from mountclient import PartialMountClient, MOUNTPROG, MOUNTVERS
 import os
+import stat
 from threading import Lock
 from lrucache import LRU
 
@@ -160,15 +161,13 @@ class NFSFuse(fuse.Fuse):
             exit(1)
 
         self.ncl.fuid = self.ncl.fgid = 0
-        fattr = self.ncl.Getattr(self.rootdh)
-        self.rootattr = fattr
+
+        rest = self.ncl.Fsinfo(self.rootdh)
+        self.rootattr = rest[0]
         self.ncl.fuid = self.rootattr[3]
         self.ncl.fgid = self.rootattr[4]
-
-        rest = self.ncl.Statfs(self.rootdh)
-        self.tsize = rest[0]
-        if not self.tsize:
-            self.tsize = 4096
+        self.rtsize = rest[2] or 4096
+        self.wtsize = rest[5] or 4096
         self.handles = LRU(self.cache)
 
         if hasattr(self,"getroot"):
@@ -199,7 +198,9 @@ class NFSFuse(fuse.Fuse):
             # check that it isn't stale
             self.ncl.fuid = fattr[3]
             self.ncl.fgid = fattr[4]
-            fattr = self.ncl.Getattr(dh)
+            #Commented to save a call. May cause problems?
+            #fattr = self.ncl.Getattr(dh)
+            #self.handles[path][1] = fattr
         except (KeyError,NFSError) as e:
             if isinstance(e, KeyError) or e.errno() == NFSERR_STALE:
                 if isinstance(e, NFSError):
@@ -208,10 +209,11 @@ class NFSFuse(fuse.Fuse):
                 dh, fattr = self.gethandle(tmppath)
                 self.ncl.fuid = fattr[3]
                 self.ncl.fgid = fattr[4]
-                dh, fattr = self.ncl.Lookup((dh, elem))
+                fh, fattr, dattr = self.ncl.Lookup((dh, elem))
                 self.ncl.fuid = fattr[3]
                 self.ncl.fgid = fattr[4]
-                self.handles[path] = (dh, fattr, time())
+                self.handles[path] = (fh, fattr, time())
+                self.handles[tmppath] = (dh, dattr, time())
             else:
                 raise
         return (dh, fattr)
@@ -228,8 +230,7 @@ class NFSFuse(fuse.Fuse):
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
-            rest = self.ncl.Getattr(handle)
-            fattr = rest
+            fattr = self.ncl.Getattr(handle)
             self.handles[path] = (handle, fattr, time())
         except NFSError as e:
             no = e.errno()
@@ -239,9 +240,9 @@ class NFSFuse(fuse.Fuse):
         st = NFSStat()
         st.st_mode, st.st_nlink, st.st_uid, st.st_gid, st.st_size \
             = fattr[1:6]
-        st.st_atime = fattr[11][0]
-        st.st_mtime = fattr[12][0]
-        st.st_ctime = fattr[13][0]
+        st.st_atime = fattr[10][0]
+        st.st_mtime = fattr[11][0]
+        st.st_ctime = fattr[12][0]
         return st
 
     #'readlink'
@@ -253,13 +254,14 @@ class NFSFuse(fuse.Fuse):
             handle, fattr = self.gethandle(path)
             if fattr[0] != NFLNK:
                 raise IOError(EINVAL, os.strerror(EINVAL), path)
-            rest = self.ncl.Readlink(handle)
+            fattr, name = self.ncl.Readlink(handle)
+            self.handles[path] = (handle, fattr, time())
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
-        return rest
+        return name
 
     #'readdir'
     def readdir(self, path, offset):
@@ -276,24 +278,43 @@ class NFSFuse(fuse.Fuse):
 
     #'mknod'
     def mknod(self, path, mode, rdev):
-        if rdev:
-            raise IOError(ENOSYS, os.strerror(ENOSYS))
         dirpath, name = path.rsplit('/',1)
         handle = None
         fattr = None
-        now = time()
-        t = (int(now), 0)
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(dirpath)
-            handle, fattr = self.ncl.Create(
-                    (handle, name, mode, fattr[3], fattr[4], 0, t, t))
+            if stat.S_ISREG(mode):
+                nh, nattr, wcc = self.ncl.Create(
+                        (handle, name, 1, #GUARDED
+                            (mode, fattr[3], fattr[4], None, (1,), (1,))
+                            )
+            else:
+                data = None
+                if stat.S_ISCHR(mode):
+                    stype = NF3CHR
+                    data = (os.major(rdev), os.minor(rdev))
+                elif stat.S_ISBLK(mode):
+                    stype = NF3BLK
+                    data = (os.major(rdev), os.minor(rdev))
+                elif stat.S_ISSOCK(mode):
+                    stype = NF3SOCK
+                elif stat.S_ISFIFO(mode):
+                    stype = NF3FIFO
+                else:
+                    raise IOError(ENOSYS, os.strerror(ENOSYS))
+                nh, nattr, wcc = self.ncl.Mknod(
+                        (handle, name, stype, (mode, fattr[3], fattr[4], None, 
+                            (1,), (1,) ), data)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, now)
+        now = time()
+        self.handles[path] = (nh, nattr, now)
+        if wcc[1]:
+            self.handles[dirpath] = (handle, wcc[1], now)
 
     #'mkdir'
     def mkdir(self, path, mode):
@@ -301,18 +322,19 @@ class NFSFuse(fuse.Fuse):
         handle = None
         fattr = None
         self.authlock.acquire()
-        now = time()
-        t = (int(now), 0)
         try:
             handle, fattr = self.gethandle(dirpath)
-            handle, fattr = self.ncl.Mkdir(
-                    (handle, name, mode, fattr[3], fattr[4], 0, t, t))
+            nh, nattr, wcc = self.ncl.Mkdir(
+                    (handle, name, (mode, fattr[3], fattr[4], none, (1,), (1,)))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, now)
+        now = time()
+        self.handles[path] = (nh, nattr, now)
+        if wcc[1]:
+            self.handles[dirpath] = (handle, wcc[1], now)
 
     #'unlink'
     def unlink(self, path):
@@ -325,12 +347,14 @@ class NFSFuse(fuse.Fuse):
             _, fattr = self.gethandle(path)
             if fattr[0] == NFDIR:
                 raise IOError(EISDIR, os.strerror(EISDIR), path)
-            self.ncl.Remove((handle, name))
+            wcc = self.ncl.Remove((handle, name))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
+        if wcc[1]:
+            self.handles[dirpath] = (handle, wcc[1], time())
 
     #'rmdir'
     def rmdir(self, path):
@@ -343,29 +367,35 @@ class NFSFuse(fuse.Fuse):
             _, fattr = self.gethandle(path)
             if fattr[0] != NFDIR:
                 raise IOError(ENOTDIR, os.strerror(ENOTDIR), path)
-            self.ncl.Rmdir((handle, name))
+            wcc = self.ncl.Rmdir((handle, name))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
+        if wcc[1]:
+            self.handles[dirpath] = (handle, wcc[1], time())
 
     #'symlink'
     def symlink(self, target, name):
         dirpath, name = name.rsplit('/',1)
         handle = None
         fattr = None
-        t = (int(time()), 0)
         self.authlock.acquire()
         try:
             handle, _ = self.gethandle(dirpath)
-            self.ncl.Symlink((handle, name, target, 0777,
-                self.ncl.fuid, self.ncl.fgid, 0, t, t))
+            nh, nattr, wcc = self.ncl.Symlink((handle, name, 
+                (None, self.ncl.fuid, self.ncl.fgid, None, (1,), (1,)),
+                target )
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
+        now = time()
+        self.handles[path] = (nh, nattr, now)
+        if wcc[1]:
+            self.handles[dirpath] = (handle, wcc[1], now)
 
     #'rename'
     def rename(self, old, new):
@@ -379,11 +409,13 @@ class NFSFuse(fuse.Fuse):
             tohandle, _ = self.gethandle(topath)
             self.gethandle(old) # to get appropriate fuid/fgid
             try:
-                self.ncl.Rename((fromhandle, fromname, tohandle, toname))
+                fwcc, twcc = self.ncl.Rename(
+                    (fromhandle, fromname, tohandle, toname))
             except NFSError as e:
                 if e.value == NFSERR_ACCES:
                     self.gethandle(topath) #try different permissions
-                    self.ncl.Rename((fromhandle, fromname, tohandle, toname))
+                    fwcc, twcc = self.ncl.Rename(
+                        (fromhandle, fromname, tohandle, toname))
                 else:
                     raise e
         except NFSError as e:
@@ -391,6 +423,11 @@ class NFSFuse(fuse.Fuse):
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
+        now = time()
+        if fwcc[1]:
+            self.handles[frompath] = (fromhandle, fwcc[1], now)
+        if twcc[1]:
+            self.handles[topath] = (tohandle, twcc[1], now)
 
     #'link'
     def link(self, target, name):
@@ -401,12 +438,17 @@ class NFSFuse(fuse.Fuse):
         try:
             fromhandle, _ = self.gethandle(target)
             todir, _ = self.gethandle(dirpath)
-            self.ncl.Link((fromhandle, todir, name))
+            attr, wcc = self.ncl.Link((fromhandle, todir, name))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
+        now = time()
+        self.handles[target] = (fromhandle, attr, now)
+        self.handles[name] = (fromhandle, attr, now)
+        if wcc[1]:
+            self.handles[dirpath] = (todir, wcc[1], now)
 
     #'chmod'
     def chmod(self, path, mode):
@@ -415,14 +457,14 @@ class NFSFuse(fuse.Fuse):
         fattr = None
         try:
             handle, fattr = self.gethandle(path)
-            fattr = self.ncl.Setattr((handle,
-                (mode, -1, -1, -1, (-1,-1), (-1,-1)) ))
+            wcc = self.ncl.Setattr((handle,
+                (mode, None, None, None, (0,), (0,)), None ))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, time())
+        self.handles[path] = (handle, wcc[1] or fattr, time())
 
     #'chown'
     def chown(self, path, uid, gid):
@@ -431,14 +473,15 @@ class NFSFuse(fuse.Fuse):
         fattr = None
         try:
             handle, fattr = self.gethandle(path)
-            fattr = self.ncl.Setattr((handle,
-                (-1, uid, gid, -1, (-1, -1), (-1, -1)) ))
+            wcc = self.ncl.Setattr((handle,
+                (None, uid, gid, None, (0,), (0,)), None ))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, time())
+        if wcc[1]:
+            self.handles[path] = (handle, wcc[1], time())
 
     #'truncate'
     def truncate(self, path, size):
@@ -447,14 +490,15 @@ class NFSFuse(fuse.Fuse):
         fattr = None
         try:
             handle, fattr = self.gethandle(path)
-            fattr = self.ncl.Setattr((handle,
-                (-1, -1, -1, size, (-1,-1), (-1,-1)) ))
+            wcc = self.ncl.Setattr((handle,
+                (None, None, None, size, (1,), (1,)) ))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, time())
+        if wcc[1]:
+            self.handles[path] = (handle, wcc[1], time())
 
     #'utime'
     def utime(self, path, times):
@@ -464,14 +508,15 @@ class NFSFuse(fuse.Fuse):
         fattr = None
         try:
             handle, fattr = self.gethandle(path)
-            fattr = self.ncl.Setattr((handle,
-                (-1, -1, -1, -1, (atime,0), (mtime,0)) ))
+            wcc = self.ncl.Setattr((handle,
+                (None, None, None, None, (2,(atime,0)), (2,(mtime,0))), None ))
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no))
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, time())
+        if wcc[1]:
+            self.handles[path] = (handle, wcc[1], time())
 
     #'open'
     #'read'
@@ -484,14 +529,19 @@ class NFSFuse(fuse.Fuse):
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
-            fattr, data = self.ncl.Read((handle, offset, size, 0))
+            ret = r''
+            for chunk in range(offset, offset + size, self.rtsize):
+                fattr, count, eof, data = self.ncl.Read(
+                        (handle, chunk, self.rtsize))
+                ret += data
+                if eof: break
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
         self.handles[path] = (handle, fattr, time())
-        return data
+        return ret
 
     #'write'
     def write(self, path, buf, offset):
@@ -499,24 +549,37 @@ class NFSFuse(fuse.Fuse):
         handle = None
         fattr = None
         size = 0
+        wcc = (None,fattr)
         try:
             handle, fattr = self.gethandle(path)
-            size = fattr[5]
-            fattr = self.ncl.Write((handle, 0, offset, 0, buf))
+            for chunk in range(offset, offset+len(buf), self.wtsize):
+                length = min(self.wtsize, offset + len(buf) - chunk)
+                base = chunk - offset
+                wcc, count, committed, verf = self.ncl.Write((handle, chunk,
+                    length, 2, buf[base:base+size]))
+                size += count
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
         finally:
             self.authlock.release()
-        self.handles[path] = (handle, fattr, time())
-        return fattr[5] - size
+        if wcc[1]:
+            self.handles[path] = (handle, wcc[1], time())
+        return size
 
     #'release'
     #'statfs'
     def statfs(self):
         st = fuse.StatVfs()
-        rest = self.ncl.Statfs(self.rootdh)
-        st.f_tsize, st.f_bsize, st.f_blocks, st.f_bfree, st.f_bavail = rest
+        rest = self.ncl.Fsstat(self.rootdh)
+        self.rootattr = rest[0]
+        st.f_tsize, st.f_bsize = self.rtsize
+        st.f_blocks = int(rest[1] / self.rtsize)
+        st.f_bfree = int(rest[2] / self.rtsize)
+        st.f_bavail = int(rest[3] / self.rtsize)
+        st.f_files = int(rest[4] / self.rtsize)
+        st.f_ffree = int(rest[5] / self.rtsize)
+        st.f_favail = int(rest[6] / self.rtsize)
         return st
 
     #'fsync'
