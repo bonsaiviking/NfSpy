@@ -121,9 +121,9 @@ BUGS
   but could use more testing. Because of this, NfSpy defaults to mounting
   ro. Specify the rw mount option to change this.
 
-* NfSpy is an NFSv2 client. NFSv2 is very old, and some servers may not
-  support it. Future releases may support NFSv3, but probably not NFSv4.
-
 * NfSpy does not work with the standard lockd and statd services, which could
   cause problems with writing to files. For read-only, though, and most
   nefarious uses for which it was intended, this shouldn't be a problem.
+
+* NfSpy only supports NFSv3 at the moment. Future versions may intelligently
+  choose a NFS version.
