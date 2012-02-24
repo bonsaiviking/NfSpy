@@ -33,7 +33,7 @@ class MountPacker(Packer):
 
 class Mount3Packer(Packer):
     def pack_fhandle(self, fhandle):
-        self.pack_fopaque(FHSIZE3, fhandle)
+        self.pack_opaque(fhandle)
 
 # Unpacker derived class for Mount protocol clients.
 # The important types we need to unpack are fhandle, fhstatus,
@@ -76,7 +76,7 @@ class MountUnpacker(Unpacker):
 
 class Mount3Unpacker(MountUnpacker):
     def unpack_fhandle(self):
-        return self.unpack_fopaque(FHSIZE3)
+        return self.unpack_opaque()
 
     def unpack_fhstatus(self):
         status = self.unpack_uint()
