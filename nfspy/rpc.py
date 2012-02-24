@@ -361,6 +361,9 @@ class RawTCPClient(Client):
 # Client using UDP to a specific port
 
 class RawUDPClient(Client):
+    def __init__(self, *args, **kwargs):
+        Client.__init__(self, *args, **kwargs)
+        self.BUFSIZE = 8192
 
     def makesocket(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -373,7 +376,6 @@ class RawUDPClient(Client):
         except ImportError:
             print 'WARNING: select not found, RPC may hang'
             select = None
-        BUFSIZE = 8192 # Max UDP buffer size
         timeout = 1
         count = 5
         while 1:
@@ -387,7 +389,7 @@ class RawUDPClient(Client):
 ##                              print 'RESEND', timeout, count
                 self.sock.send(call)
                 continue
-            reply = self.sock.recv(BUFSIZE)
+            reply = self.sock.recv(self.BUFSIZE)
             u = self.unpacker
             u.reset(reply)
             xid, verf = u.unpack_replyheader()
@@ -429,7 +431,6 @@ class RawBroadcastUDPClient(RawUDPClient):
         except ImportError:
             print 'WARNING: select not found, broadcast will hang'
             select = None
-        BUFSIZE = 8192 # Max UDP buffer size (for reply)
         replies = []
         if unpack_func is None:
             def dummy(): pass
@@ -443,7 +444,7 @@ class RawBroadcastUDPClient(RawUDPClient):
                     r, w, x = select(r, w, x, self.timeout)
             if self.sock not in r:
                 break
-            reply, fromaddr = self.sock.recvfrom(BUFSIZE)
+            reply, fromaddr = self.sock.recvfrom(self.BUFSIZE)
             u = self.unpacker
             u.reset(reply)
             xid, verf = u.unpack_replyheader()
