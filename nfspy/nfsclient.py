@@ -3,12 +3,12 @@
 
 import rpc
 from rpc import UDPClient, TCPClient
-from mountclient import FHSIZE, MountPacker, MountUnpacker
+from mountclient import FHSIZE, Mount3Packer, Mount3Unpacker
 import errno
 import os
 
 NFS_PROGRAM = 100003
-NFS_VERSION = 2
+NFS_VERSION = 3
 
 
 class NFSError(Exception):
@@ -82,6 +82,38 @@ class NFSError(Exception):
     def errno(self):
         return self.value
 
+NFS_OK = NFSError.NFS3_OK
+#sizes
+NFS3_COOKIEVERFSIZE = 8
+NFS3_CREATEVERFSIZE = 8
+NFS3_WRITEVERFSIZE = 8
+NFSSVC_MAXBLKSIZE = 32*1024
+#rpc reply header               24
+#nfsstat3 status                 4
+#post_op_attr file_attributes 0
+#    bool attributes_follow      4
+#    fattr3 attributes 0
+#        ftype3 type             4
+#        mode3 mode              4
+#        uint32 nlink            4
+#        uid3 uid                4
+#        gid3 gid                4
+#        size3 size              8
+#        size3 used              8
+#        specdata3 rdev          8
+#        uint64 fsid             8
+#        fileid3 fileid          8
+#        nfstime3 atime          8
+#        nfstime3 mtime          8
+#        nfstime3 ctime          8
+#count3 count                    4
+#bool eof                        4
+#opaque data 0
+#    uint len                    4
+#    fopaque data[len] 0
+#total                         128
+NFS3_READ_XDR_SIZE = 128
+
 # enum ftype3
 NF3NON   = 0
 NF3REG   = 1
@@ -97,20 +129,26 @@ class NFSPacker(Mount3Packer):
     def pack_sattrargs(self, sa):
         file, attributes, guard = sa
         self.pack_fhandle(file)
-        self.pack_sattr(attributes)
-        self.pack_bool(guard[0])
-        if guard[0]:
-            self.pack_nfstime3(guard[1])
+        self.pack_sattr3(attributes)
+        if guard is None:
+            self.pack_bool(False)
+        else:
+            self.pack_bool(True)
+            self.pack_nfstime3(guard)
 
     def pack_sattr3(self, sa):
         mode, uid, gid, size, atime, mtime = sa
         for attr in (mode, uid, gid):
-            self.pack_bool(attr[0])
-            if attr[0]:
-                self.pack_uint(attr[1])
-        self.pack_bool(size[0])
-        if size[0]:
-            self.pack_uhyper(size[1])
+            if attr is None:
+                self.pack_bool(False)
+            else:
+                self.pack_bool(True)
+                self.pack_uint(attr)
+        if size is None:
+            self.pack_bool(False)
+        else:
+            self.pack_bool(True)
+            self.pack_uhyper(size)
         for t in (atime, mtime):
             self.pack_enum(t[0])
             if t[0]==2:
@@ -130,7 +168,7 @@ class NFSPacker(Mount3Packer):
         dir, cookie, cookieverf, count = ra
         self.pack_fhandle(dir)
         self.pack_uhyper(cookie)
-        self.pack_opaque(cookieverf)
+        self.pack_fopaque(NFS3_COOKIEVERFSIZE, cookieverf)
         self.pack_uint(count)
 
     def pack_readdirplusargs(self, ra):
@@ -158,7 +196,7 @@ class NFSPacker(Mount3Packer):
         if how == 1 or how == 2:
             self.pack_sattr3(sattr)
         else: #how == 3
-            self.pack_opaque(sattr) #createverf3
+            self.pack_fopaque(NFS3_CREATEVERFSIZE, sattr) #createverf3
 
     def pack_specdata(self, spec):
         self.pack_uint(spec[0])
@@ -204,16 +242,16 @@ class NFSPacker(Mount3Packer):
         self.pack_uint(nsecs)
 
 
-class NFSUnpacker(MountUnpacker):
+class NFSUnpacker(Mount3Unpacker):
 
     def unpack_readdirres(self):
         status = self.unpack_enum()
         attr = self.unpack_post_op_attr()
         if status == NFS_OK:
-            verf = self.unpack_opaque()
+            verf = self.unpack_fopaque(NFS3_COOKIEVERFSIZE)
             entries = self.unpack_list(self.unpack_entry)
             eof = self.unpack_bool()
-            rest = (verf, entries, eof)
+            rest = (attr, verf, entries, eof)
         else:
             rest = attr
         return (status, rest)
@@ -222,10 +260,10 @@ class NFSUnpacker(MountUnpacker):
         status = self.unpack_enum()
         attr = self.unpack_post_op_attr()
         if status == NFS_OK:
-            verf = self.unpack_opaque()
+            verf = self.unpack_fopaque(NFS3_COOKIEVERFSIZE)
             entries = self.unpack_list(self.unpack_entryplus)
             eof = self.unpack_bool()
-            rest = (verf, entries, eof)
+            rest = (attr, verf, entries, eof)
         else:
             rest = attr
         return (status, rest)
@@ -283,7 +321,7 @@ class NFSUnpacker(MountUnpacker):
 
     def unpack_readres(self):
         status = self.unpack_enum()
-        fa = self.unpack_fattr()
+        fa = self.unpack_post_op_attr()
         if status == NFS_OK:
             count = self.unpack_uint()
             eof = self.unpack_bool()
@@ -307,13 +345,13 @@ class NFSUnpacker(MountUnpacker):
         if status == NFS_OK:
             count = self.unpack_uint()
             committed = self.unpack_enum()
-            verf = self.unpack_opaque()
+            verf = self.unpack_fopaque(NFS3_WRITEVERFSIZE)
             rest = (wcc, count, committed, verf)
         else:
             rest = wcc
         return status, rest
 
-    def unpack_wcc_attr():
+    def unpack_wcc_attr(self):
         size = self.unpack_uhyper()
         mtime = self.unpack_nfstime3()
         ctime = self.unpack_nfstime3()
@@ -357,7 +395,7 @@ class NFSUnpacker(MountUnpacker):
         status = self.unpack_enum()
         wcc = self.unpack_wcc_data()
         if status == NFS_OK:
-            verf = self.unpack_opaque()
+            verf = self.unpack_fopaque(NFS3_WRITEVERFSIZE)
             rest = (wcc, verf)
         else:
             rest = wcc
@@ -469,6 +507,7 @@ def check_status(procedure):
 class UDPNFSClient(UDPClient):
     def __init__(self, host):
         UDPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION)
+        self.BUFSIZE = NFSSVC_MAXBLKSIZE + NFS3_READ_XDR_SIZE
 
 class TCPNFSClient(TCPClient):
     def __init__(self, host):
@@ -509,7 +548,7 @@ class PartialNFSClient:
     def Setattr(self, sa):
         return self.make_call(2, sa, \
                 self.packer.pack_sattrargs, \
-                self.unpacker.unpack_wcc_data)
+                self.unpacker.unpack_wccstat)
 
     # Root() is obsolete
 
@@ -632,16 +671,16 @@ class PartialNFSClient:
     # Shorthand to get the entire contents of a directory
     def Listdir(self, dir, tsize):
         list = []
-        ra = (dir, 0, tsize)
+        ra = (dir, 0, '', tsize)
         while 1:
-            attr, entries, eof = self.Readdir(ra)
+            attr, verf, entries, eof = self.Readdir(ra)
             last_cookie = None
             for fileid, name, cookie in entries:
                 list.append((fileid, name))
                 last_cookie = cookie
             if eof or last_cookie is None:
                 break
-            ra = (ra[0], last_cookie, ra[2])
+            ra = (ra[0], last_cookie, verf, ra[3])
         return list
 
 class TCPNFSClient(TCPClient,PartialNFSClient):
