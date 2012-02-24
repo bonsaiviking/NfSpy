@@ -94,7 +94,7 @@ class NFSFuse(fuse.Fuse):
             """
             To avoid multiple calls to mountclient.Umnt, set self.mcl = FakeUmnt()
             """
-            def Umnt(path):
+            def Umnt(self, path):
                 pass
 
         if hasattr(self,"server"):
