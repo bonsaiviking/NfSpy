@@ -94,7 +94,11 @@ class NFSFuse(fuse.Fuse):
         self.mcl = None
         self.handles = None
 
-    def main(self):
+    def main(self, *args, **kwargs):
+
+        return fuse.Fuse.main(self, *args, **kwargs)
+
+    def fsinit(self):
         class FakeUmnt:
             """
             To avoid multiple calls to mountclient.Umnt, set self.mcl = FakeUmnt()
@@ -187,11 +191,6 @@ class NFSFuse(fuse.Fuse):
             except NFSError as e:
                 if e.value != NFSError.NFS3ERR_NOENT:
                     raise
-
-        return fuse.Fuse.main(self)
-
-    def fsinit(self):
-        pass
 
     def _gethandle(self, path):
         fh = None
