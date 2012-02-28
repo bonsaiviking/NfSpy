@@ -192,6 +192,7 @@ class TCPMountClient(PartialMountClient, TCPClient):
 class UDPMountClient(PartialMountClient, UDPClient):
 
     def __init__(self, host, vers=MOUNTVERS):
+        self.version = vers
         UDPClient.__init__(self, host, MOUNTPROG, vers)
 
 
