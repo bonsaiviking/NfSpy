@@ -667,13 +667,13 @@ class NFSStatVfs(fuse.StatVfs):
         self.f_tsize = 0
         fuse.StatVfs.__init__(self, **kw)
 
-def main():
+def main(nfsFuseClass):
     usage="""
 NFSFuse: An NFS client with auth spoofing. Must be run as root.
 
 """ + fuse.Fuse.fusage
 
-    server = NFSFuse(version="%prog " + fuse.__version__,
+    server = nfsFuseClass(version="%prog " + fuse.__version__,
         usage=usage, dash_s_do='setsingle')
     server.parser.add_option(mountopt='server',metavar='HOST:PATH',
         help='connect to server HOST:PATH')
@@ -686,7 +686,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')
     server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
     server.parse(values=server, errex=1)
-    server.main()
+    return server.main()
 
 if __name__ == '__main__':
-    main()
+    main(NFSFuse)
