@@ -82,21 +82,21 @@ class NFSNode(object):
     def __init__(self):
         pass
 
-class NFSFuse(fuse.Fuse):
-    def __init__(self, *args, **kw):
-        fuse.Fuse.__init__(self, *args, **kw)
-        self.fuse_args.add("ro", True)
+class NfSpy(object):
+    def __init__(self, server=None, mountport="udp", nfsport="udp",
+            dirhandle=None, hide=False, getroot=False,
+            cachesize=1024, cachetimeout=120):
         self.authlock = Lock()
-        self.cachetimeout = 120 # seconds
-        self.cache = 1024
-        self.mountport = "udp"
-        self.nfsport = "udp"
+        self.cachetimeout = cachetimeout
+        self.cache = cachesize
+        self.mountport = mountport
+        self.nfsport = nfsport
         self.mcl = None
         self.handles = None
-
-    def main(self, *args, **kwargs):
-
-        return fuse.Fuse.main(self, *args, **kwargs)
+        self.dirhandle = dirhandle
+        self.hide = hide
+        self.getroot = getroot
+        self.server = server
 
     def fsinit(self):
         class FakeUmnt:
@@ -106,12 +106,12 @@ class NFSFuse(fuse.Fuse):
             def Umnt(self, path):
                 pass
 
-        if hasattr(self,"server"):
+        if self.server:
             self.host, self.path = self.server.split(':',1);
         else:
-            raise fuse.FuseError, "No server specified"
+            raise RuntimeError, "No server specified"
 
-        if hasattr(self,"dirhandle"):
+        if self.dirhandle:
             self.mcl = FakeUmnt()
             self.rootdh = ''.join( map( lambda x: chr(int(x,16)),
                     self.dirhandle.split(':')))
@@ -132,16 +132,15 @@ class NFSFuse(fuse.Fuse):
                 elif proto == "tcp":
                     self.mcl = FallbackTCPMountClient(self.host, port)
                 else:
-                    raise fuse.FuseError, "Invalid mount transport: %s" % proto
+                    raise RuntimeError, "Invalid mount transport: %s" % proto
             except socket.error as e:
-                sys.stderr.write("Problem mounting to %s:%s/%s: %s\n"
-                        % (self.host, repr(port), proto, os.strerror(e.errno)))
-                exit(1)
+                raise RuntimeError, "Problem mounting to %s:%s/%s: %s\n" % (
+                        self.host, repr(port), proto, os.strerror(e.errno))
 
             status, dirhandle, auth_flavors = self.mcl.Mnt(self.path)
             if status <> 0:
                 raise IOError(status, os.strerror(status), self.path)
-            if hasattr(self,"hide"):
+            if self.hide:
                 self.mcl.Umnt(self.path)
                 self.mcl = FakeUmnt()
             self.rootdh = dirhandle
@@ -164,9 +163,8 @@ class NFSFuse(fuse.Fuse):
             else:
                 raise fuse.FuseError, "Invalid NFS transport: %s" % proto
         except socket.error as e:
-            sys.stderr.write("Problem establishing NFS to %s:%s/%s: %s\n"
-                    % (self.host, repr(port), proto, os.strerror(e.errno)))
-            exit(1)
+            raise RuntimeError, "Problem establishing NFS to %s:%s/%s: %s\n" % (
+                    self.host, repr(port), proto, os.strerror(e.errno))
 
         self.ncl.fuid = self.ncl.fgid = 0
 
@@ -181,7 +179,7 @@ class NFSFuse(fuse.Fuse):
         self.wtsize = min(rest[5] or 4096, NFSSVC_MAXBLKSIZE)
         self.handles = LRU(self.cache)
 
-        if hasattr(self,"getroot"):
+        if self.getroot:
             try:
                 handle, attr = self.gethandle("/..")
                 while handle != self.rootdh:
@@ -274,7 +272,7 @@ class NFSFuse(fuse.Fuse):
         self.authlock.acquire()
         try:
             handle, fattr = self.gethandle(path)
-            entries = (fuse.Direntry(dir[1]) for dir in self.ncl.Listdir(handle, self.rtsize))
+            entries = self.ncl.Listdir(handle, self.rtsize)
         except NFSError as e:
             no = e.errno()
             raise IOError(no, os.strerror(no), path)
@@ -554,11 +552,6 @@ class NFSFuse(fuse.Fuse):
 
     #'write'
     def write(self, path, buf, offset):
-        """
-        python-fuse doesn't support setting fuse capabilities such as
-        FUSE_CAP_BIG_WRITES (from <fuse/fuse_common.h>), so buf will never
-        be longer than 4096 bytes. :(
-        """
         self.authlock.acquire()
         handle = None
         fattr = None
@@ -584,16 +577,16 @@ class NFSFuse(fuse.Fuse):
     #'release'
     #'statfs'
     def statfs(self):
-        st = fuse.StatVfs()
+        st = posix.statvfs()
         rest = self.ncl.Fsstat(self.rootdh)
         self.rootattr = rest[0]
-        st.f_tsize = st.f_bsize = self.rtsize
+        st.f_frsize = st.f_bsize = self.rtsize
         st.f_blocks = int(rest[1] / self.rtsize)
         st.f_bfree = int(rest[2] / self.rtsize)
         st.f_bavail = int(rest[3] / self.rtsize)
-        st.f_files = int(rest[4] / self.rtsize)
-        st.f_ffree = int(rest[5] / self.rtsize)
-        st.f_favail = int(rest[6] / self.rtsize)
+        st.f_files = rest[4]
+        st.f_ffree = rest[5]
+        st.f_favail = rest[6]
         return st
 
     #'fsync'
@@ -661,11 +654,36 @@ class NFSFuse(fuse.Fuse):
     def fsdestroy(self):
         self.mcl.Umnt(self.path)
 
+class NFSFuse(NfSpy, fuse.Fuse):
+    def __init__(self, *args, **kw):
+        fuse.Fuse.__init__(self, *args, **kw)
+        self.fuse_args.add("ro", True)
+        NfSpy.__init__(self)
 
-class NFSStatVfs(fuse.StatVfs):
-    def __init__(self, **kw):
-        self.f_tsize = 0
-        fuse.StatVfs.__init__(self, **kw)
+    def main(self, *args, **kwargs):
+
+        return fuse.Fuse.main(self, *args, **kwargs)
+
+    def fsinit(self):
+        try:
+            NfSpy.fsinit(self)
+        except RuntimeError as e:
+            raise fuse.FuseError, e.message
+
+    def readdir(self, path, offset):
+        return (fuse.Direntry(dir[1]) for dir in NfSpy.readdir(self, path, offset))
+
+    def statfs(self):
+        ret_st = fuse.StatVfs()
+        st = NfSpy.statfs(self)
+        ret_st.f_tsize = ret_st.f_bsize = st.f_bsize
+        ret_st.f_blocks = st.f_blocks
+        ret_st.f_bfree = st.f_bfree
+        ret_st.f_bavail = st.f_bavail
+        ret_st.f_files = st.f_files
+        ret_st.f_ffree = st.f_ffree
+        ret_st.f_favail = st.f_favail
+        return ret_st
 
 def main(nfsFuseClass):
     usage="""
