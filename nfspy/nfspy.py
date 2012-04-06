@@ -66,15 +66,17 @@ class NFSStat(fuse.Stat):
 class EvilNFSClient(PartialNFSClient):
     def mkcred(self):
         self.cred = rpc.AUTH_UNIX, rpc.make_auth_unix(int(time()),
-            socket.gethostname(), self.fuid, self.fgid, [])
+            self.fakename or socket.gethostname(), self.fuid, self.fgid, [])
         return self.cred
 
 class EvilFallbackTCPNFSClient(EvilNFSClient, FallbackTCPClient):
-    def __init__(self, host, port=None):
+    def __init__(self, host, port=None, fakename=None):
+        self.fakename = fakename
         FallbackTCPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION, port)
 
 class EvilFallbackUDPNFSClient(EvilNFSClient, FallbackUDPClient):
-    def __init__(self, host, port=None):
+    def __init__(self, host, port=None, fakename=None):
+        self.fakename = fakename
         FallbackUDPClient.__init__(self, host, NFS_PROGRAM, NFS_VERSION, port)
         self.BUFSIZE = NFSSVC_MAXBLKSIZE + NFS3_READ_XDR_SIZE
 
@@ -82,13 +84,26 @@ class NFSNode(object):
     def __init__(self):
         pass
 
+def splitport(port):
+    port = port.split('/',1)
+    if len(port) == 2:
+        port, proto = port
+    else:
+        port = port[0]
+    try:
+        port = int(port)
+    except ValueError:
+        proto = port
+        port = None
+    return port, proto
+
 class NfSpy(object):
     def __init__(self, server=None, mountport="udp", nfsport="udp",
-            dirhandle=None, hide=False, getroot=False,
+            dirhandle=None, hide=False, getroot=False, fakename=None,
             cachesize=1024, cachetimeout=120):
         self.authlock = Lock()
-        self.cachetimeout = cachetimeout
-        self.cache = cachesize
+        self.cachetimeout = int(cachetimeout)
+        self.cache = int(cachesize)
         self.mountport = mountport
         self.nfsport = nfsport
         self.mcl = None
@@ -97,6 +112,7 @@ class NfSpy(object):
         self.hide = hide
         self.getroot = getroot
         self.server = server
+        self.fakename=fakename
 
     def fsinit(self):
         class FakeUmnt:
@@ -116,16 +132,8 @@ class NfSpy(object):
             self.rootdh = ''.join( map( lambda x: chr(int(x,16)),
                     self.dirhandle.split(':')))
         else:
-            port = self.mountport.split('/',1)
-            proto = "udp"
-            if len(port) == 2:
-                port, proto = port
-            else:
-                port = port[0]
-            try:
-                port = int(port)
-            except ValueError:
-                port = None
+            port, proto = splitport(self.mountport)
+            proto = proto or "udp"
             try:
                 if proto == "udp":
                     self.mcl = FallbackUDPMountClient(self.host, port)
@@ -145,21 +153,13 @@ class NfSpy(object):
                 self.mcl = FakeUmnt()
             self.rootdh = dirhandle
 
-        port = self.nfsport.split('/',1)
-        proto = "udp"
-        if len(port) == 2:
-            port, proto = port
-        else:
-            port = port[0]
-        try:
-            port = int(port)
-        except ValueError:
-            port = None
+        port, proto = splitport(self.nfsport)
+        proto = proto or "udp"
         try:
             if proto == "udp":
-                self.ncl = EvilFallbackUDPNFSClient(self.host, port)
+                self.ncl = EvilFallbackUDPNFSClient(self.host, port,fakename=self.fakename)
             elif proto == "tcp":
-                self.ncl = EvilFallbackTCPNFSClient(self.host, port)
+                self.ncl = EvilFallbackTCPNFSClient(self.host, port,fakename=self.fakename)
             else:
                 raise fuse.FuseError, "Invalid NFS transport: %s" % proto
         except socket.error as e:
@@ -703,6 +703,7 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
     server.parser.add_option(mountopt='dirhandle',metavar='00:AA:BB...',help='Use a colon-separated hex bytes representation of a directory handle instead of using mountd')
     server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')
     server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
+    server.parser.add_option(mountopt='fakename',metavar='HOSTNAME',default=None,help='try to fake your hostname')
     server.parse(values=server, errex=1)
     return server.main()
 
