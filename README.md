@@ -21,15 +21,15 @@ it could still be possible to circumvent the security measures.
 
 ### Squash root
 
-The server or the share ("export" in NFS lingo) can be configured squash_root,
+The server or the share ("export" in NFS lingo) can be configured squash\_root,
 meaning that any requests that come in claiming to be UID or GID 0 (root) will
 be treated like the nobody user, or equivalent on the system. This does not
 prevent an attacker from spoofing any other UID/GID combo, but will protect the
 most sensitive info and configs on the export.
 
-### nfs_portmon
+### nfs\_portmon
 
-Another setting that can be enabled is nfs_portmon, which denies requests
+Another setting that can be enabled is nfs\_portmon, which denies requests
 coming from source ports outside of the 513-1024 range. Since only root can
 (usually) allocate these ports, this prevents a regular user on a trusted
 machine from writing and using their own NFS client that fakes UID/GID. It does
@@ -44,7 +44,7 @@ These Access Control Lists can consist of:
 * IP addresses (e.g. 192.168.1.34)
 * IP prefixes (e.g. @192.168.1)
 * hostnames (e.g. server1.mydom.nis)
-* host lists (e.g. @trusted_hosts)
+* host lists (e.g. @trusted\_hosts)
 * "everyone"
 
 The best configuration would be to use a host list, since querying the nfs
@@ -69,7 +69,7 @@ There is an NFS server on 192.168.1.124.
     /home (everyone)
 
 Mount up the share. Using sudo lets you bind to a privileged port, and the 
-allow_other option lets any user use the filesystem. The other new option here
+allow\_other option lets any user use the filesystem. The other new option here
 is "hide", which immediately "unmounts" the share on the server, but keeps the 
 filehandle it got. This hides your presence from anyone using showmount -a
 
