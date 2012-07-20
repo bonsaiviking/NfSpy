@@ -83,7 +83,10 @@ class Mount3Unpacker(MountUnpacker):
         if status == 0:
             fh = self.unpack_fhandle()
             #Not sure how to use this:
-            auth_flavors = self.unpack_uint()
+            num_flavors = self.unpack_uint()
+            auth_flavors = []
+            for n in xrange(num_flavors):
+                auth_flavors.append(self.unpack_uint())
         else:
             fh = None
         return status, fh, auth_flavors
