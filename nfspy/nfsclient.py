@@ -76,7 +76,7 @@ class NFSError(Exception):
         self.value = value
     def __str__(self):
         try:
-            return os.strerror(lookup[self.value])
+            return os.strerror(NFSError.lookup[self.value])
         except KeyError:
             return "NFS Error"
     def errno(self):
