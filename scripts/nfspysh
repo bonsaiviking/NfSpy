@@ -1,0 +1,179 @@
+#!/usr/bin/env python
+
+from nfspy import NfSpy, NFSError, NF3DIR
+from optparse import OptionParser
+import os
+import errno
+import sys
+import shlex
+import re
+import posixpath as path
+from datetime import datetime
+
+reUnicode = re.compile(r'\{\{(?P<codepoint>\d+)\}\}')
+def uncode(string):
+    ret = ''
+    pos = 0
+    for m in reUnicode.finditer(string):
+        ret += string[pos:m.start()]
+        ret += unichr(int(m.group('codepoint')))
+        pos = m.end()
+    ret += string[pos:]
+    return ret
+
+def complain(func):
+    err = func.__doc__
+    if err:
+        sys.stderr.write("{0}: {1}\n".format(func.__name__, err.rstrip()))
+    else:
+        sys.stderr.write("{0}: Incorrect usage\n".format(func.__name__))
+
+def report(e):
+    sys.stderr.write("{0}\n".format(str(e)))
+
+class Exit(Exception):
+    pass
+
+class Commands(object):
+    def __init__(self, shell):
+        self.shell = shell
+    def __call__(self, *args):
+        if hasattr(self, args[0]):
+            func = getattr(self, args[0])
+            try:
+                func(*args[1:])
+            except TypeError:
+                complain(func)
+                raise
+            except (IOError,NFSError) as e:
+                report(e)
+        else:
+            print("Wat: " + " ".join(args))
+
+    def cd(self, directory):
+        """cd <dir>"""
+        self.shell.rcwd = self.shell.canonicalize(directory)
+        self.shell.spy.getattr(self.shell.rcwd)
+
+    def lcd(self, directory):
+        """lcd <local_dir>"""
+        os.chdir(directory)
+
+    def pwd(self):
+        """pwd"""
+        print self.shell.rcwd
+
+    def ls(self, filename="."):
+        """ls [<filename>]"""
+        f = self.shell.canonicalize(filename)
+        lines = None
+        dirname = None
+        if self.shell.isdir(f):
+            dirname = f
+            lines = self.shell.spy.readdir(f,0)
+        else:
+            dirname = path.dirname(f)
+            lines = [(None,path.basename(f))]
+        print "{0}:".format(dirname)
+        for entry in lines:
+            attr = self.shell.spy.getattr(path.join(dirname,entry[1]))
+            print "{mode:06o} {uid: >5} {gid: >5} {size: >10} {date!s} {name}".format(
+                    mode=attr.st_mode,
+                    uid=attr.st_uid,
+                    gid=attr.st_gid,
+                    size=attr.st_size,
+                    date=datetime.fromtimestamp(attr.st_mtime),
+                    name=entry[1]
+                    )
+
+    def get(self, filename):
+        """get <filename>"""
+        f = self.shell.canonicalize(filename)
+        size = self.shell.spy.getattr(f).st_size
+        out = open(path.basename(f), "w")
+        bsize = 4096 # 4KB, change for your blocksize?
+        for offset in range(0, size, bsize):
+            out.write( self.shell.spy.read(f, bsize, offset) )
+        out.close()
+
+    def exit(self):
+        """exit"""
+        raise Exit
+
+class Shell(object):
+    def __init__(self, spy):
+        self.spy = spy
+        self.spy.fsinit()
+        self.runner = Commands(self)
+        self.rcwd = "/"
+
+    def canonicalize(self,pathname):
+        ret = None
+        if path.isabs(pathname):
+            ret = path.normpath( pathname )
+        else:
+            ret = path.normpath( path.join( self.rcwd, pathname ) )
+        return ret
+
+    def isdir(self, pathname):
+        pathname = self.canonicalize(pathname)
+        _, fattr = self.spy.gethandle(pathname)
+        return fattr[0] == NF3DIR
+
+    def prompt(self):
+        return "nfspy@{server}:{export}:{path}> ".format(
+            server = self.spy.host,
+            export = self.spy.path,
+            path = self.rcwd
+            )
+
+    def run(self):
+        sys.stdout.write(self.prompt())
+        line = sys.stdin.readline().decode(sys.stdin.encoding)
+        try:
+            while line:
+                try:
+                    line = line.encode('ascii')
+                except UnicodeEncodeError:
+                    try:
+                        line2 = ''
+                        for c in line:
+                            if ord(c) < 128:
+                                line2 += c
+                            else:
+                                line2 += '{{%d}}'%(ord(c))
+                        line = line2.encode('ascii')
+                    except TypeError:
+                        print "Can't handle that code point"
+                        continue
+                arr = map(uncode, shlex.split(line, posix=False))
+                self.runner(*arr)
+                sys.stdout.write(self.prompt())
+                line = sys.stdin.readline().decode(sys.stdin.encoding)
+        except Exit:
+            pass
+        finally:
+            print "Quitting."
+            self.spy.fsdestroy()
+
+if __name__ == '__main__':
+    spy = None
+    def parse_mountopts(option, opt_str, value, parser):
+        opts = {}
+        for pair in (o.split('=') for o in value.split(',')):
+            try:
+                opts[pair[0]] = pair[1]
+            except IndexError:
+                opts[pair[0]] = True
+        parser.values.spy = NfSpy(**opts)
+
+    parser = OptionParser()
+    parser.add_option('-o', action='callback', nargs=1, type='string', callback=parse_mountopts,
+            help="Mount options as in nfspy")
+
+    parser.parse_args()
+
+    sh = Shell(parser.values.spy)
+    #Print some info from statfs?
+
+    sh.run()
