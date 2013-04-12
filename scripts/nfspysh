@@ -165,6 +165,9 @@ class Shell(object):
             )
 
     def docmd(self, line):
+        line = line.strip()
+        if line == "":
+            return
         try:
             line = line.encode('ascii')
         except UnicodeEncodeError:
