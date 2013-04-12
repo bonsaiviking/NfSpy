@@ -246,7 +246,20 @@ if __name__ == '__main__':
                 opts[pair[0]] = True
         parser.values.spy = NfSpy(**opts)
 
+    def help_options(option, opt_str, value, parser):
+        print "Options that may be specified to -o"
+        for opt in NfSpy.options:
+            fmt = "  {example: <26}{help}"
+            example = opt['mountopt']
+            if 'metavar' in opt:
+                example = "{mountopt}={metavar}".format(**opt)
+            if 'default' in opt:
+                fmt += " (default {default})"
+            print fmt.format(example=example,**opt)
+        sys.exit(0)
+
     parser = OptionParser()
+    parser.add_option('-l', action='callback', callback=help_options, help="List mount options available")
     parser.add_option('-o', action='callback', nargs=1, type='string', callback=parse_mountopts,
             metavar="OPTIONS",
             help="Mount options as in nfspy")

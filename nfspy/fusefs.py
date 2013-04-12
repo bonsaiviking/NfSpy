@@ -57,17 +57,8 @@ NFSFuse: An NFS client with auth spoofing. Must be run as root.
 
     server = nfsFuseClass(version="%prog " + fuse.__version__,
         usage=usage, dash_s_do='setsingle')
-    server.parser.add_option(mountopt='server',metavar='HOST:PATH',
-        help='connect to server HOST:PATH')
-    server.parser.add_option(mountopt='hide',action='store_true',help='Immediately unmount from the server, staying mounted on the client')
-    # subbedopts doesn't support "default" kwarg. Leaving it in anyway for clarity, but it gets set in NFSFuse.main()
-    server.parser.add_option(mountopt='cache',type="int",default=1024,help='Number of handles to cache')
-    server.parser.add_option(mountopt='cachetimeout',type="int",default=120,help='Timeout on handle cache')
-    server.parser.add_option(mountopt='mountport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for mount protocol, e.g. "635/udp"')
-    server.parser.add_option(mountopt='dirhandle',metavar='00:AA:BB...',help='Use a colon-separated hex bytes representation of a directory handle instead of using mountd')
-    server.parser.add_option(mountopt='getroot',action='store_true',help='Try to find the top-level directory of the export from the directory handle provided with "dirhandle"')
-    server.parser.add_option(mountopt='nfsport',metavar='PORT/TRANSPORT',default="udp",help='Specify port/transport for NFS protocol, e.g. "2049/udp"')
-    server.parser.add_option(mountopt='fakename',metavar='HOSTNAME',default=None,help='try to fake your hostname')
+    for opt in NfSpy.options:
+        server.parser.add_option(**opt)
     server.parse(values=server, errex=1)
     return server.main()
 

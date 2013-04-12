@@ -94,6 +94,51 @@ def splitport(port):
     return port, proto
 
 class NfSpy(object):
+    options = (
+            {'mountopt': 'server',
+                'metavar': 'HOST:PATH',
+                'help': 'connect to server HOST:PATH'},
+
+            {'mountopt': 'hide',
+                'action': 'store_true',
+                'help': 'Immediately unmount from the server, staying mounted on the client'},
+
+            {'mountopt': 'cachesize',
+                'type': 'int',
+                'metavar': 'N',
+                'default': 1024,
+                'help': 'Number of handles to cache'},
+
+            {'mountopt': 'cachetimeout',
+                'type': 'int',
+                'metavar': 'T',
+                'default': 120,
+                'help': 'Timeout on handle cache'},
+
+            {'mountopt': 'mountport',
+                'metavar': 'PORT/TRANSPORT',
+                'default': 'udp',
+                'help': 'Specify port/transport for mount protocol, e.g. "635/udp"'},
+
+            {'mountopt': 'nfsport',
+                'metavar': 'PORT/TRANSPORT',
+                'default': 'udp',
+                'help': 'Specify port/transport for NFS protocol, e.g. "2049/udp"'},
+
+            {'mountopt': 'dirhandle',
+                'metavar': '00:AA:BB...',
+                'help': 'Use a colon-separated hex bytes representation of a directory handle instead of using mountd'},
+
+            {'mountopt': 'getroot',
+                'action': 'store_true',
+                'help': 'Try to find the top-level directory of the export from the directory handle provided with "dirhandle"'},
+
+            {'mountopt': 'fakename',
+                'metavar': 'HOSTNAME',
+                'help': 'try to fake your hostname'},
+
+            )
+
     def __init__(self, server=None, mountport="udp", nfsport="udp",
             dirhandle=None, hide=False, getroot=False, fakename=None,
             cachesize=1024, cachetimeout=120):
