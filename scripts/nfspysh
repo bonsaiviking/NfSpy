@@ -159,7 +159,13 @@ class Commands(object):
         remotename = remotename or os.path.basename(filename)
         f = self.shell.canonicalize(remotename)
         bsize = 4096 # 4KB, change for your blocksize?
-        self.shell.spy.mknod(f, 0100666, 0) #regular file chmod 666
+        try:
+            self.shell.spy.mknod(f, 0100666, 0) #regular file chmod 666
+        except IOError as e:
+            if e.errno == errno.EEXIST:
+                self.shell.spy.truncate(f, 0)
+            else:
+                raise e
         for offset in range(0, size, bsize):
             self.shell.spy.write( f, filein.read(min(bsize, size-offset)), offset )
         filein.close()
