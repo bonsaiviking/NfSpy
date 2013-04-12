@@ -3,6 +3,7 @@
 from nfspy import NfSpy, NFSError, NF3DIR
 from optparse import OptionParser
 import os
+import stat
 import errno
 import sys
 import shlex
@@ -91,31 +92,48 @@ class Commands(object):
         Print the current local working directory."""
         print os.getcwd()
 
-    def ls(self, filename="."):
-        """ls [<filename>]
+    def ls(self, *args):
+        """ls [-r] [<filename> ...]
         
         Print info about <filename>. <filename> defaults to '.'.
-        Columns are Mode, UID, GID, Size, Mtime, and Name."""
-        f = self.shell.canonicalize(filename)
-        lines = None
-        dirname = None
-        if self.shell.isdir(f):
-            dirname = f
-            lines = self.shell.spy.readdir(f,0)
-        else:
-            dirname = path.dirname(f)
-            lines = [(None,path.basename(f))]
-        print "{0}:".format(dirname)
-        for entry in lines:
-            attr = self.shell.spy.getattr(path.join(dirname,entry[1]))
-            print "{mode:06o} {uid: >5} {gid: >5} {size: >10} {date!s} {name}".format(
-                    mode=attr.st_mode,
-                    uid=attr.st_uid,
-                    gid=attr.st_gid,
-                    size=attr.st_size,
-                    date=datetime.fromtimestamp(attr.st_mtime),
-                    name=entry[1]
-                    )
+        Columns are Mode, UID, GID, Size, Mtime, and Name.
+        '-r' enables recursive listing."""
+        tolist = list(args)
+        recursive = False
+        if "-r" in tolist:
+            recursive = True
+            tolist.remove("-r")
+        if not tolist:
+            tolist.append(".")
+        while tolist:
+            filename = tolist.pop()
+            f = self.shell.canonicalize(filename)
+            lines = None
+            dirname = None
+            try:
+                if self.shell.isdir(f):
+                    dirname = f
+                    print "{0}:".format(dirname)
+                    lines = self.shell.spy.readdir(f,0)
+                else:
+                    dirname = path.dirname(f)
+                    lines = [(None,path.basename(f))]
+                for entry in lines:
+                    fullname = path.join(dirname, entry[1])
+                    attr = self.shell.spy.getattr(fullname)
+                    if recursive and stat.S_ISDIR(attr.st_mode) and entry[1] != "." and entry[1] != "..":
+                        tolist.append(fullname)
+                    print "{mode:06o} {uid: >5} {gid: >5} {size: >10} {date!s} {name}".format(
+                            mode=attr.st_mode,
+                            uid=attr.st_uid,
+                            gid=attr.st_gid,
+                            size=attr.st_size,
+                            date=datetime.fromtimestamp(attr.st_mtime),
+                            name=entry[1]
+                            )
+            except IOError as e:
+                report(e)
+                continue
 
     def get(self, filename, localname=None):
         """get <filename> [<localname>]
