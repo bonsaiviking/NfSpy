@@ -160,7 +160,7 @@ class Commands(object):
         f = self.shell.canonicalize(remotename)
         bsize = 4096 # 4KB, change for your blocksize?
         try:
-            self.shell.spy.mknod(f, 0100666, 0) #regular file chmod 666
+            self.shell.spy.mknod(f, 0100664, 0) #regular file chmod 664
         except IOError as e:
             if e.errno == errno.EEXIST:
                 self.shell.spy.truncate(f, 0)
