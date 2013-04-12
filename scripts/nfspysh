@@ -9,6 +9,7 @@ import shlex
 import re
 import posixpath as path
 from datetime import datetime
+import inspect
 
 reUnicode = re.compile(r'\{\{(?P<codepoint>\d+)\}\}')
 def uncode(string):
@@ -20,13 +21,6 @@ def uncode(string):
         pos = m.end()
     ret += string[pos:]
     return ret
-
-def complain(func):
-    err = func.__doc__
-    if err:
-        sys.stderr.write("{0}: {1}\n".format(func.__name__, err.rstrip()))
-    else:
-        sys.stderr.write("{0}: Incorrect usage\n".format(func.__name__))
 
 def report(e):
     sys.stderr.write("{0}\n".format(str(e)))
@@ -43,28 +37,62 @@ class Commands(object):
             try:
                 func(*args[1:])
             except TypeError:
-                complain(func)
-                raise
+                err = func.__doc__
+                if err:
+                    sys.stderr.write("Usage: {0}\n".format(err.split("\n",1)[0]))
+                else:
+                    sys.stderr.write("{0}: Incorrect usage\n".format(func.__name__))
             except (IOError,NFSError) as e:
                 report(e)
         else:
-            print("Wat: " + " ".join(args))
+            print "Unknown command: {0}".format(args[0])
+
+    def help(self, cmd=None):
+        """help [<cmd>]
+        
+        Print a list of known commands. With <cmd>, print the help for <cmd>."""
+        if cmd:
+            if hasattr(self, cmd) and not cmd.startswith("_"):
+                func = getattr(self, cmd)
+                print func.__doc__ or "No help for {0}".format(cmd)
+            else:
+                print "Unknown command: {0}".format(cmd)
+        else:
+            print "Known commands:"
+            for c, _ in inspect.getmembers(self, inspect.ismethod):
+                if not c.startswith("_"):
+                    print "    {0}".format(c)
 
     def cd(self, directory):
-        """cd <dir>"""
+        """cd <dir>
+        
+        Change remote working directory to <dir>."""
         self.shell.rcwd = self.shell.canonicalize(directory)
         self.shell.spy.getattr(self.shell.rcwd)
 
     def lcd(self, directory):
-        """lcd <local_dir>"""
+        """lcd <dir>
+        
+        Change local working directory to <dir>."""
         os.chdir(directory)
 
     def pwd(self):
-        """pwd"""
+        """pwd
+        
+        Print the current remote working directory."""
         print self.shell.rcwd
+    
+    def lpwd(self):
+        """lpwd
+        
+        Print the current local working directory."""
+        print os.getcwd()
 
     def ls(self, filename="."):
-        """ls [<filename>]"""
+        """ls [<filename>]
+        
+        Print info about <filename>. <filename> defaults to '.'.
+        Columns are Mode, UID, GID, Size, Mtime, and Name."""
         f = self.shell.canonicalize(filename)
         lines = None
         dirname = None
@@ -86,18 +114,24 @@ class Commands(object):
                     name=entry[1]
                     )
 
-    def get(self, filename):
-        """get <filename>"""
+    def get(self, filename, localname=None):
+        """get <filename> [<localname>]
+        
+        Retrieve <filename> and save to <localname>. If no <localname> is given,
+        defaults to the basename of <filename> in the current local working directory."""
         f = self.shell.canonicalize(filename)
         size = self.shell.spy.getattr(f).st_size
-        out = open(path.basename(f), "w")
+        localname = localname or path.basename(f)
+        out = open(localname, "w")
         bsize = 4096 # 4KB, change for your blocksize?
         for offset in range(0, size, bsize):
             out.write( self.shell.spy.read(f, bsize, offset) )
         out.close()
 
     def exit(self):
-        """exit"""
+        """exit
+        
+        Close nfspysh, shutting down connection to the server."""
         raise Exit
 
 class Shell(object):
