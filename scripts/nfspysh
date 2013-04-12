@@ -212,12 +212,21 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     parser.add_option('-o', action='callback', nargs=1, type='string', callback=parse_mountopts,
+            metavar="OPTIONS",
             help="Mount options as in nfspy")
+    parser.add_option('-c', action='store', nargs=1, type='string', dest="batchcommand",
+            metavar="COMMAND",
+            help="Semicolon-separated commands to run (batch mode)")
 
-    parser.parse_args()
+    (opts, args) = parser.parse_args()
 
     sh = Shell(parser.values.spy)
     #Print some info from statfs?
 
-    sh.run()
+    if opts.batchcommand:
+        for cmd in opts.batchcommand.split(';'):
+            sh.docmd(cmd)
+    else:
+        sh.run()
+    
     sh.close()
