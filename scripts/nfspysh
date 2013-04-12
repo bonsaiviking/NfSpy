@@ -170,6 +170,17 @@ class Commands(object):
             self.shell.spy.write( f, filein.read(min(bsize, size-offset)), offset )
         filein.close()
 
+    def chmod(self, mode, filename):
+        """chmod <mode> <filename>
+
+        Change <filename>'s mode. <mode> must be 3 or 4 octal digits."""
+        mode = int(mode, 8)
+        if mode > 07777:
+            print "Invalid mode."
+            return
+        f = self.shell.canonicalize(filename)
+        self.shell.spy.chmod(f, mode)
+
     def exit(self):
         """exit
         
