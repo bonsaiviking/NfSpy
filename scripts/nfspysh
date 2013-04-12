@@ -185,19 +185,19 @@ class Shell(object):
     def run(self):
         sys.stdout.write(self.prompt())
         line = sys.stdin.readline().decode(sys.stdin.encoding)
-        try:
-            while line:
-                try:
-                    self.docmd(line)
-                except Exception as e:
-                    logging.exception(e)
-                sys.stdout.write(self.prompt())
-                line = sys.stdin.readline().decode(sys.stdin.encoding)
-        except Exit:
-            pass
-        finally:
-            print "Quitting."
-            self.spy.fsdestroy()
+        while line:
+            try:
+                self.docmd(line)
+            except Exit:
+                break
+            except Exception as e:
+                logging.exception(e)
+            sys.stdout.write(self.prompt())
+            line = sys.stdin.readline().decode(sys.stdin.encoding)
+        print "Quitting."
+
+    def close(self):
+        self.spy.fsdestroy()
 
 if __name__ == '__main__':
     spy = None
@@ -220,3 +220,4 @@ if __name__ == '__main__':
     #Print some info from statfs?
 
     sh.run()
+    sh.close()
