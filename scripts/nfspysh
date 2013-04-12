@@ -10,6 +10,9 @@ import re
 import posixpath as path
 from datetime import datetime
 import inspect
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 reUnicode = re.compile(r'\{\{(?P<codepoint>\d+)\}\}')
 def uncode(string):
@@ -161,27 +164,33 @@ class Shell(object):
             path = self.rcwd
             )
 
+    def docmd(self, line):
+        try:
+            line = line.encode('ascii')
+        except UnicodeEncodeError:
+            try:
+                line2 = ''
+                for c in line:
+                    if ord(c) < 128:
+                        line2 += c
+                    else:
+                        line2 += '{{%d}}'%(ord(c))
+                line = line2.encode('ascii')
+            except TypeError:
+                print "Can't handle that code point"
+                return
+        arr = map(uncode, shlex.split(line, posix=False))
+        self.runner(*arr)
+
     def run(self):
         sys.stdout.write(self.prompt())
         line = sys.stdin.readline().decode(sys.stdin.encoding)
         try:
             while line:
                 try:
-                    line = line.encode('ascii')
-                except UnicodeEncodeError:
-                    try:
-                        line2 = ''
-                        for c in line:
-                            if ord(c) < 128:
-                                line2 += c
-                            else:
-                                line2 += '{{%d}}'%(ord(c))
-                        line = line2.encode('ascii')
-                    except TypeError:
-                        print "Can't handle that code point"
-                        continue
-                arr = map(uncode, shlex.split(line, posix=False))
-                self.runner(*arr)
+                    self.docmd(line)
+                except Exception as e:
+                    logging.exception(e)
                 sys.stdout.write(self.prompt())
                 line = sys.stdin.readline().decode(sys.stdin.encoding)
         except Exit:
