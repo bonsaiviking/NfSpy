@@ -372,7 +372,7 @@ class NfSpy(object):
         try:
             handle, fattr = self.gethandle(dirpath)
             nh, nattr, wcc = self.ncl.Mkdir(
-                    (handle, name, (mode, fattr[3], fattr[4], none, (1,), (1,)))
+                    (handle, name, (mode, fattr[3], fattr[4], None, (1,), (1,)))
                     )
         except NFSError as e:
             no = e.errno()
