@@ -190,6 +190,20 @@ class Commands(object):
         f = self.shell.canonicalize(filename)
         self.shell.spy.chmod(f, mode)
 
+    def mkdir(self, dirname):
+        """mkdir <dirname>
+
+        Create a directory at <dirname>."""
+        n = self.shell.canonicalize(dirname)
+        self.shell.spy.mkdir(n, 0775)
+
+    def rmdir(self, dirname):
+        """rmdir <dirname>
+
+        Remove the directory at <dirname>."""
+        n = self.shell.canonicalize(dirname)
+        self.shell.spy.rmdir(n)
+
     def exit(self):
         """exit
         
