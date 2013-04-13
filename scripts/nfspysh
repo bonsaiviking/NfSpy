@@ -119,17 +119,26 @@ class Commands(object):
                     dirname = path.dirname(f)
                     lines = [(None,path.basename(f))]
                 for entry in lines:
-                    fullname = path.join(dirname, entry[1])
+                    name = entry[1]
+                    fullname = path.join(dirname, name)
                     attr = self.shell.spy.getattr(fullname)
-                    if recursive and stat.S_ISDIR(attr.st_mode) and entry[1] != "." and entry[1] != "..":
-                        tolist.append(fullname)
+                    if stat.S_ISDIR(attr.st_mode):
+                        if recursive and name != "." and name != "..":
+                            tolist.append(fullname)
+                    elif stat.S_ISLNK(attr.st_mode):
+                        dest = "<error>"
+                        try:
+                            dest = self.shell.spy.readlink(fullname)
+                        except IOError as e:
+                            report(e)
+                        name = "{0} -> {1}".format(name, dest)
                     print "{mode:06o} {uid: >5} {gid: >5} {size: >10} {date!s} {name}".format(
                             mode=attr.st_mode,
                             uid=attr.st_uid,
                             gid=attr.st_gid,
                             size=attr.st_size,
                             date=datetime.fromtimestamp(attr.st_mtime),
-                            name=entry[1]
+                            name=name
                             )
             except IOError as e:
                 report(e)
