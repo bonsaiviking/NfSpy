@@ -190,6 +190,22 @@ class Commands(object):
         f = self.shell.canonicalize(filename)
         self.shell.spy.chmod(f, mode)
 
+    def chown(self, ugid, filename):
+        """chown <uid:gid> <filename>
+
+        Change <filename>'s owner to <uid:gid>. uid and gid must be numeric.
+        Either uid or gid may be blank (no change)."""
+        ugid = ugid.split(':',1)
+        uid = gid = None
+        if len(ugid) == 2:
+            uid, gid = ugid
+        else:
+            uid = ugid[0]
+        uid = int(uid) if uid else None
+        gid = int(gid) if gid else None
+        f = self.shell.canonicalize(filename)
+        self.shell.spy.chown(f, uid, gid)
+
     def mkdir(self, dirname):
         """mkdir <dirname>
 
