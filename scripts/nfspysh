@@ -172,7 +172,17 @@ class Commands(object):
             self.shell.spy.mknod(f, 0100666 & ~self.shell.umask, 0)
         except IOError as e:
             if e.errno == errno.EEXIST:
-                self.shell.spy.truncate(f, 0)
+                if self.shell.isdir(f):
+                    f = path.normpath(path.join(f, os.path.basename(filename)))
+                    try:
+                        self.shell.spy.mknod(f, 0100666 & ~self.shell.umask, 0)
+                    except IOError as e:
+                        if e.errno == errno.EEXIST:
+                            self.shell.spy.truncate(f, 0)
+                        else:
+                            raise e
+                else:
+                    self.shell.spy.truncate(f, 0)
             else:
                 raise e
         for offset in range(0, size, bsize):
