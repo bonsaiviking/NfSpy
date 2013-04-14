@@ -334,16 +334,6 @@ class Shell(object):
         self.spy.fsdestroy()
 
 if __name__ == '__main__':
-    spy = None
-    def parse_mountopts(option, opt_str, value, parser):
-        opts = {}
-        for pair in (o.split('=') for o in value.split(',')):
-            try:
-                opts[pair[0]] = pair[1]
-            except IndexError:
-                opts[pair[0]] = True
-        parser.values.spy = NfSpy(**opts)
-
     def help_options(option, opt_str, value, parser):
         print "Options that may be specified to -o"
         for opt in NfSpy.options:
@@ -358,7 +348,7 @@ if __name__ == '__main__':
 
     parser = OptionParser()
     parser.add_option('-l', action='callback', callback=help_options, help="List mount options available")
-    parser.add_option('-o', action='callback', nargs=1, type='string', callback=parse_mountopts,
+    parser.add_option('-o', action='store', nargs=1, type='string',
             metavar="OPTIONS",
             help="Mount options as in nfspy")
     parser.add_option('-c', action='store', nargs=1, type='string', dest="batchcommand",
@@ -367,7 +357,19 @@ if __name__ == '__main__':
 
     (opts, args) = parser.parse_args()
 
-    sh = Shell(parser.values.spy)
+    spy = None
+    if not opts.o:
+        parser.error("Required option -o not present")
+    else:
+        oargs = {}
+        for pair in (o.split('=') for o in opts.o.split(',')):
+            try:
+                oargs[pair[0]] = pair[1]
+            except IndexError:
+                oargs[pair[0]] = True
+        spy = NfSpy(**oargs)
+
+    sh = Shell(spy)
     #Print some info from statfs?
 
     if opts.batchcommand:
