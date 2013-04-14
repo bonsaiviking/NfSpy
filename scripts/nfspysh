@@ -237,6 +237,21 @@ class Commands(object):
         f = self.shell.canonicalize(filename)
         self.shell.spy.unlink(f)
 
+    def mv(self, old, new):
+        """mv <old> <new>
+
+        Rename <old> to <new>. If <new> is a directory, move <old> into <new>."""
+        old = self.shell.canonicalize(old)
+        new = self.shell.canonicalize(new)
+        try:
+            attr = self.shell.spy.getattr(new)
+            if stat.S_ISDIR(attr.st_mode):
+                new = path.normpath(path.join(new, path.basename(old)))
+        except IOError as e:
+            if e.errno != errno.ENOENT:
+                raise e
+        self.shell.spy.rename(old, new)
+
     def umask(self, mask=None):
         """umask [<mask>]
 
