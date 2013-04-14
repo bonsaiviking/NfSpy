@@ -151,6 +151,8 @@ class Commands(object):
         defaults to the basename of <filename> in the current local working directory."""
         f = self.shell.canonicalize(filename)
         size = self.shell.spy.getattr(f).st_size
+        if localname and os.path.isdir(localname):
+            localname = os.path.normpath(os.path.join(localname, path.basename(f)))
         localname = localname or path.basename(f)
         out = open(localname, "w")
         bsize = 4096 # 4KB, change for your blocksize?
