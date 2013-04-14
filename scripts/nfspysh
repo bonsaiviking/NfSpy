@@ -169,7 +169,7 @@ class Commands(object):
         f = self.shell.canonicalize(remotename)
         bsize = 4096 # 4KB, change for your blocksize?
         try:
-            self.shell.spy.mknod(f, 0100664, 0) #regular file chmod 664
+            self.shell.spy.mknod(f, 0100666 & ~self.shell.umask, 0)
         except IOError as e:
             if e.errno == errno.EEXIST:
                 self.shell.spy.truncate(f, 0)
@@ -211,7 +211,7 @@ class Commands(object):
 
         Create a directory at <dirname>."""
         n = self.shell.canonicalize(dirname)
-        self.shell.spy.mkdir(n, 0775)
+        self.shell.spy.mkdir(n, 0777 & ~self.shell.umask )
 
     def rmdir(self, dirname):
         """rmdir <dirname>
@@ -219,6 +219,22 @@ class Commands(object):
         Remove the directory at <dirname>."""
         n = self.shell.canonicalize(dirname)
         self.shell.spy.rmdir(n)
+
+    def rm(self, filename):
+        """rm <filename>
+
+        Remove <filename>."""
+        f = self.shell.canonicalize(filename)
+        self.shell.spy.unlink(f)
+
+    def umask(self, mask=None):
+        """umask [<mask>]
+
+        Show current umask or set umask to <mask> (octal)."""
+        if mask:
+            self.shell.umask = int(mask,8)
+        else:
+            print "{0:03o}".format(self.shell.umask)
 
     def exit(self):
         """exit
@@ -232,6 +248,7 @@ class Shell(object):
         self.spy.fsinit()
         self.runner = Commands(self)
         self.rcwd = "/"
+        self.umask = 022
 
     def canonicalize(self,pathname):
         ret = None
