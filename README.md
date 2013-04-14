@@ -21,7 +21,7 @@ it could still be possible to circumvent the security measures.
 
 ### Squash root
 
-The server or the share ("export" in NFS lingo) can be configured squash\_root,
+The server or the share ("export" in NFS lingo) can be configured root\_squash,
 meaning that any requests that come in claiming to be UID or GID 0 (root) will
 be treated like the nobody user, or equivalent on the system. This does not
 prevent an attacker from spoofing any other UID/GID combo, but will protect the
