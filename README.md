@@ -2,9 +2,15 @@ NfSpy - an ID-spoofing NFS client
 =================================
 by [Daniel Miller](https://github.com/bonsaiviking)
 
-NfSpy is a library/program that uses the Filesystem in Userspace (FUSE)
-library to automate the falsification of NFS credentials when mounting an NFS
-share.
+NfSpy is a Python library for automating the falsification of NFS credentials when mounting an NFS
+share. Included are two client programs:
+
+* **nfspy** uses the Filesystem in Userspace (FUSE) library to mount an NFS
+  share in Linux. This allows the use of any regular file-searching and
+  manipulation programs like `grep` and `find` to explore the NFS export.
+
+* **nfspysh** is a ftp-like interactive shell for exploring NFS exports. It does
+  not require the FUSE library, so it can run on non-Linux platforms.
 
 Vulnerability exploited
 -----------------------
@@ -113,6 +119,48 @@ up the directory tree to the root of the export.
 Note that we didn't provide a path to mount, since all we know is the nfs
 filehandle.
 
+Using nfspysh
+-------------
+
+`nfspysh` takes the same basic set of options in the same format as `nfspy`, so
+the tutorial above should work fine. The list of commands can be seen with the
+"help" command.
+
+    $ sudo PYTHONPATH=. python scripts/nfspysh -o server=127.0.0.1:/home/miller/nfs
+    nfspy@127.0.0.1:/home/miller/nfs:/> ls
+    /:
+    040775  1000  1000       4096 2013-04-13 23:20:37 .
+    040775  1000  1000       4096 2013-04-13 23:20:37 ..
+    040775  1000  1000       4096 2013-04-11 06:36:48 public
+    040775  1000  1000       4096 2013-04-13 23:26:40 more
+    040700     0  1000       4096 2013-04-11 06:39:12 secrets
+    100666  1000  1000          5 2013-04-13 23:28:02 README.md
+    120777  1000  1000         21 2013-04-13 13:00:24 nmap -> /usr/local/share/nmap
+    nfspy@127.0.0.1:/home/miller/nfs:/more> help
+    Known commands:
+        cd
+        chmod
+        chown
+        exit
+        get
+        help
+        lcd
+        lpwd
+        ls
+        mkdir
+        mv
+        put
+        pwd
+        rm
+        rmdir
+        umask
+    nfspy@127.0.0.1:/home/miller/nfs:/more> help get
+    get <filename> [<localname>]
+    
+            Retrieve <filename> and save to <localname>. If no <localname> is given,
+            defaults to the basename of <filename> in the current local working directory.
+    nfspy@127.0.0.1:/home/miller/nfs:/more> exit
+    Quitting.
 
 BUGS
 ----
@@ -120,6 +168,7 @@ BUGS
 * Write access is beta. It has worked in my tests on a handful of systems,
   but could use more testing. Because of this, NfSpy defaults to mounting
   ro. Specify the rw mount option to change this.
+  (nfspysh does not have a read-only mode. Tread carefully!)
 
 * NfSpy does not work with the standard lockd and statd services, which could
   cause problems with writing to files. For read-only, though, and most
