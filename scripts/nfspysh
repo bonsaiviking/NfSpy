@@ -40,7 +40,8 @@ class Commands(object):
             func = getattr(self, args[0])
             try:
                 func(*args[1:])
-            except TypeError:
+            except TypeError as e:
+                logging.exception(e)
                 err = func.__doc__
                 if err:
                     sys.stderr.write("Usage: {0}\n".format(err.split("\n",1)[0]))
@@ -268,10 +269,14 @@ class Commands(object):
 
         Show disk usage."""
         fsstat = self.shell.spy.statfs()
-        print "{0}B-blocks  Used  Available".format(fsstat.f_frsize)
-        print "{0}  {1}  {2}".format(fsstat.f_blocks, fsstat.f_blocks-fsstat.f_bfree, fsstat.f_bavail)
-        print "Files  Used  Available"
-        print "{0}  {1}  {2}".format(fsstat.f_files, fsstat.f_files-fsstat.f_ffree, fsstat.f_favail)
+        hb = ("{0}B-blocks".format(fsstat.f_frsize), "Used", "Available", "Use")
+        vb = (fsstat.f_blocks, fsstat.f_blocks-fsstat.f_bfree, fsstat.f_bavail, 100 - 100*fsstat.f_bfree/fsstat.f_blocks)
+        sep = ("---", "---", "---", "---")
+        hf = ("Files", "Used", "Available", "Use")
+        vf = (fsstat.f_files, fsstat.f_files-fsstat.f_ffree, fsstat.f_favail, 100 - 100*fsstat.f_ffree/fsstat.f_files)
+        w = tuple( max( len(str(row[i])) for row in (hb,vb,hf,vf) ) for i in range(4) )
+        for row in (hb,vb,sep,hf,vf):
+            print " ".join("{0:>{1}}".format(*x) for x in zip(row,w)) +"%"
 
     def exit(self):
         """exit
