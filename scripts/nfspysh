@@ -133,7 +133,7 @@ class Commands(object):
                         except IOError as e:
                             report(e)
                         name = "{0} -> {1}".format(name, dest)
-                    print "{mode:06o} {uid: >5} {gid: >5} {size: >10} {date!s} {name}".format(
+                    print "{mode:06o} {uid: >6} {gid: >6} {size: >11} {date!s} {name}".format(
                             mode=attr.st_mode,
                             uid=attr.st_uid,
                             gid=attr.st_gid,
