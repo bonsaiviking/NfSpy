@@ -212,7 +212,7 @@ class NfSpy(object):
                         self.host, repr(port), proto, os.strerror(e.errno))
 
             status, dirhandle, auth_flavors = self.mcl.Mnt(self.path)
-            if status <> 0:
+            if status != 0:
                 raise IOError(status, os.strerror(status), self.path)
             if self.hide:
                 self.mcl.Umnt(self.path)
@@ -648,9 +648,9 @@ class NfSpy(object):
         #XXX: This should be ok, but doesn't actually work?
         #self.rootattr = rest[0]
         st.f_frsize = st.f_bsize = self.rtsize
-        st.f_blocks = int(rest[1] / self.rtsize)
-        st.f_bfree = int(rest[2] / self.rtsize)
-        st.f_bavail = int(rest[3] / self.rtsize)
+        st.f_blocks = int(rest[1] // self.rtsize)
+        st.f_bfree = int(rest[2] // self.rtsize)
+        st.f_bavail = int(rest[3] // self.rtsize)
         st.f_files = rest[4]
         st.f_ffree = rest[5]
         st.f_favail = rest[6]
@@ -683,9 +683,9 @@ class NfSpy(object):
         rmode = fattr[1]
         uid = fattr[3]
         gid = fattr[4]
-        if uid <> 0 and gid <> 0:
+        if uid != 0 and gid != 0:
             return 0
-        elif gid <> 0:
+        elif gid != 0:
             if mode & os.R_OK and rmode & 044:
                 return 0
             elif mode & os.W_OK and rmode & 022:
@@ -694,7 +694,7 @@ class NfSpy(object):
                 return 0
             else:
                 raise IOError(EACCES, os.strerror(EACCES), path)
-        elif uid <> 0:
+        elif uid != 0:
             if mode & os.R_OK and rmode & 0404:
                 return 0
             elif mode & os.W_OK and rmode & 0202:

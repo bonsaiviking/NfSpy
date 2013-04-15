@@ -47,14 +47,14 @@ class Commands(object):
                     sys.stderr.write("Usage: {0}\n".format(err.split("\n",1)[0]))
                 else:
                     sys.stderr.write("{0}: Incorrect usage\n".format(func.__name__))
-            except (IOError,NFSError) as e:
+            except (OSError,IOError,NFSError) as e:
                 report(e)
         else:
             print "Unknown command: {0}".format(args[0])
 
     def help(self, cmd=None):
         """help [<cmd>]
-        
+
         Print a list of known commands. With <cmd>, print the help for <cmd>."""
         if cmd:
             if hasattr(self, cmd) and not cmd.startswith("_"):
@@ -70,32 +70,32 @@ class Commands(object):
 
     def cd(self, directory):
         """cd <dir>
-        
+
         Change remote working directory to <dir>."""
         self.shell.rcwd = self.shell.canonicalize(directory)
         self.shell.spy.getattr(self.shell.rcwd)
 
     def lcd(self, directory):
         """lcd <dir>
-        
+
         Change local working directory to <dir>."""
         os.chdir(directory)
 
     def pwd(self):
         """pwd
-        
+
         Print the current remote working directory."""
         print self.shell.rcwd
-    
+
     def lpwd(self):
         """lpwd
-        
+
         Print the current local working directory."""
         print os.getcwd()
 
     def ls(self, *args):
         """ls [-r] [<filename> ...]
-        
+
         Print info about <filename>. <filename> defaults to '.'.
         Columns are Mode, UID, GID, Size, Mtime, and Name.
         '-r' enables recursive listing."""
@@ -147,7 +147,7 @@ class Commands(object):
 
     def get(self, filename, localname=None):
         """get <filename> [<localname>]
-        
+
         Retrieve <filename> and save to <localname>. If no <localname> is given,
         defaults to the basename of <filename> in the current local working directory."""
         f = self.shell.canonicalize(filename)
@@ -163,7 +163,7 @@ class Commands(object):
 
     def put(self, filename, remotename=None):
         """put <filename> [<remotename>]
-        
+
         Upload <filename> to <remotename>. If no <remotename> is given,
         defaults to the basename of <filename> in the current remote working directory."""
         size = os.path.getsize(filename)
@@ -270,17 +270,17 @@ class Commands(object):
         Show disk usage."""
         fsstat = self.shell.spy.statfs()
         hb = ("{0}B-blocks".format(fsstat.f_frsize), "Used", "Available", "Use")
-        vb = (fsstat.f_blocks, fsstat.f_blocks-fsstat.f_bfree, fsstat.f_bavail, 100 - 100*fsstat.f_bfree/fsstat.f_blocks)
+        vb = (fsstat.f_blocks, fsstat.f_blocks-fsstat.f_bfree, fsstat.f_bavail, int(round(100 - 100.0*fsstat.f_bfree/fsstat.f_blocks)))
         sep = ("---", "---", "---", "---")
         hf = ("Files", "Used", "Available", "Use")
-        vf = (fsstat.f_files, fsstat.f_files-fsstat.f_ffree, fsstat.f_favail, 100 - 100*fsstat.f_ffree/fsstat.f_files)
+        vf = (fsstat.f_files, fsstat.f_files-fsstat.f_ffree, fsstat.f_favail, int(round(100 - 100.0*fsstat.f_ffree/fsstat.f_files)))
         w = tuple( max( len(str(row[i])) for row in (hb,vb,hf,vf) ) for i in range(4) )
         for row in (hb,vb,sep,hf,vf):
             print " ".join("{0:>{1}}".format(*x) for x in zip(row,w)) +"%"
 
     def exit(self):
         """exit
-        
+
         Close nfspysh, shutting down connection to the server."""
         raise Exit
 
@@ -394,5 +394,5 @@ if __name__ == '__main__':
             sh.docmd(cmd)
     else:
         sh.run()
-    
+
     sh.close()

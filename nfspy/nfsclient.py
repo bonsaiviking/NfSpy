@@ -498,7 +498,7 @@ def check_status(procedure):
         else:
             status = ret
             ret = None
-        if status <> NFS_OK:
+        if status != NFS_OK:
             raise NFSError(status)
         else:
             return ret
