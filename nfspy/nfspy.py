@@ -46,18 +46,43 @@ class FallbackUDPMountClient(PartialMountClient, FallbackUDPClient):
         FallbackUDPClient.__init__(self, host, MOUNTPROG, 3, port)
         self.BUFSIZE = NFSSVC_MAXBLKSIZE + NFS3_READ_XDR_SIZE
 
-class NFSStat(object):
+class NFSAbstractStat(object):
+    arr = ()
     def __init__(self):
-        self.st_mode = 0
-        self.st_ino = 0
-        self.st_dev = 0
-        self.st_nlink = 0
-        self.st_uid = 0
-        self.st_gid = 0
-        self.st_size = 0
-        self.st_atime = 0
-        self.st_mtime = 0
-        self.st_ctime = 0
+        for n in self.__class__.arr:
+            setattr(self, n, 0)
+    def __getitem__(self,i):
+        return getattr(self, self.__class__.arr[i])
+    def __setitem__(self,i,v):
+        return setattr(self, self.__class__.arr[i], v)
+
+class NFSStatvfs(NFSAbstractStat):
+    arr = (
+        "f_bsize",
+        "f_frsize",
+        "f_blocks",
+        "f_bfree",
+        "f_bavail",
+        "f_files",
+        "f_ffree",
+        "f_favail",
+        "f_flag",
+        "f_namemax",
+        )
+
+class NFSStat(NFSAbstractStat):
+    arr = (
+        "st_mode",
+        "st_ino",
+        "st_dev",
+        "st_nlink",
+        "st_uid",
+        "st_gid",
+        "st_size",
+        "st_atime",
+        "st_mtime",
+        "st_ctime",
+        )
 
 class EvilNFSClient(PartialNFSClient):
     def mkcred(self):
@@ -618,9 +643,10 @@ class NfSpy(object):
     #'release'
     #'statfs'
     def statfs(self):
-        st = posix.statvfs()
+        st = NFSStatvfs()
         rest = self.ncl.Fsstat(self.rootdh)
-        self.rootattr = rest[0]
+        #XXX: This should be ok, but doesn't actually work?
+        #self.rootattr = rest[0]
         st.f_frsize = st.f_bsize = self.rtsize
         st.f_blocks = int(rest[1] / self.rtsize)
         st.f_bfree = int(rest[2] / self.rtsize)
