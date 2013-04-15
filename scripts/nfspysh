@@ -263,6 +263,16 @@ class Commands(object):
         else:
             print "{0:03o}".format(self.shell.umask)
 
+    def df(self):
+        """df
+
+        Show disk usage."""
+        fsstat = self.shell.spy.statfs()
+        print "{0}B-blocks  Used  Available".format(fsstat.f_frsize)
+        print "{0}  {1}  {2}".format(fsstat.f_blocks, fsstat.f_blocks-fsstat.f_bfree, fsstat.f_bavail)
+        print "Files  Used  Available"
+        print "{0}  {1}  {2}".format(fsstat.f_files, fsstat.f_files-fsstat.f_ffree, fsstat.f_favail)
+
     def exit(self):
         """exit
         
