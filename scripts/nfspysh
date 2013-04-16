@@ -156,7 +156,7 @@ class Commands(object):
             localname = os.path.normpath(os.path.join(localname, path.basename(f)))
         localname = localname or path.basename(f)
         out = open(localname, "w")
-        bsize = 4096 # 4KB, change for your blocksize?
+        bsize = self.shell.spy.rtsize
         for offset in range(0, size, bsize):
             out.write( self.shell.spy.read(f, bsize, offset) )
         out.close()
@@ -170,7 +170,7 @@ class Commands(object):
         filein = open(filename, "r")
         remotename = remotename or os.path.basename(filename)
         f = self.shell.canonicalize(remotename)
-        bsize = 4096 # 4KB, change for your blocksize?
+        bsize = self.shell.spy.wtsize
         try:
             self.shell.spy.mknod(f, 0100666 & ~self.shell.umask, 0)
         except IOError as e:
