@@ -119,6 +119,14 @@ up the directory tree to the root of the export.
 Note that we didn't provide a path to mount, since all we know is the nfs
 filehandle.
 
+The `tshark` program is part of the Wireshark project. The common `tcpdump`
+program also has the ability to decode NFS filehandles with the `-u` option:
+
+sudo tcpdump -n -i eth1 -u -- port 2049
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
+11:16:38.041242 IP 192.168.1.5.3057978128 > 192.168.1.124.2049: 120 getattr fh[2070001:762001:0:7500c611:a04186e6:edccffaa:1a0a608e:a065:500859ff:762001:adebb708]
+
 Using nfspysh
 -------------
 

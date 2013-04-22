@@ -152,7 +152,7 @@ class NfSpy(object):
 
             {'mountopt': 'dirhandle',
                 'metavar': '00:AA:BB...',
-                'help': 'Use a colon-separated hex bytes representation of a directory handle instead of using mountd'},
+                'help': 'Use a hex bytes representation of a directory handle instead of using mountd. Colons are ignored.'},
 
             {'mountopt': 'getroot',
                 'action': 'store_true',
@@ -195,8 +195,8 @@ class NfSpy(object):
 
         if self.dirhandle:
             self.mcl = FakeUmnt()
-            self.rootdh = ''.join( map( lambda x: chr(int(x,16)),
-                    self.dirhandle.split(':')))
+            dh = self.dirhandle.translate(None, ':')
+            self.rootdh = ''.join( chr(int(dh[i:i+2],16)) for i in range(0,len(dh),2) )
         else:
             port, proto = splitport(self.mountport)
             proto = proto or "udp"
