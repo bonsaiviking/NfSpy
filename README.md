@@ -117,15 +117,19 @@ up the directory tree to the root of the export.
     $ sudo nfspy -o rw,server=192.168.1.124:,nfsport=2049/udp,dirhandle=01:00:04:01:01:00:22:00:e5:03:d8:9d:07:00:22:00:15:83:74:d5:00:00:00:00:00:00:00:00:00:00:00:00,getroot mnt
 
 Note that we didn't provide a path to mount, since all we know is the nfs
-filehandle.
+filehandle. For this to work, the handle must be to a directory, not a file,
+and you have to work quickly or the handle will become stale.
 
 The `tshark` program is part of the Wireshark project. The common `tcpdump`
 program also has the ability to decode NFS filehandles with the `-u` option:
 
-sudo tcpdump -n -i eth1 -u -- port 2049
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
-listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
-11:16:38.041242 IP 192.168.1.5.3057978128 > 192.168.1.124.2049: 120 getattr fh[2070001:762001:0:7500c611:a04186e6:edccffaa:1a0a608e:a065:500859ff:762001:adebb708]
+    sudo tcpdump -n -i eth1 -u -- port 2049
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
+    11:16:38.041242 IP 192.168.1.5.3057978128 > 192.168.1.124.2049: 120 getattr fh[2070001:762001:0:7500c611:a04186e6:edccffaa:1a0a608e:a065:500859ff:762001:adebb708]
+
+These filehandles are 4-byte colon-separated, so you'll have to pad them with zeros
+on your own; NfSpy will just strip the colons out, which is incorrect.
 
 Using nfspysh
 -------------
