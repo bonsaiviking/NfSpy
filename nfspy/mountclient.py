@@ -80,6 +80,8 @@ class Mount3Unpacker(MountUnpacker):
 
     def unpack_fhstatus(self):
         status = self.unpack_uint()
+        auth_flavors = None
+        fh = None
         if status == 0:
             fh = self.unpack_fhandle()
             #Not sure how to use this:
