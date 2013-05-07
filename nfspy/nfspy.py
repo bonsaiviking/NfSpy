@@ -261,7 +261,7 @@ class NfSpy(object):
         fh = None
         fattr = None
         try:
-            if path == "" or path == "/":
+            if path == "" or path == "/" or path == "/.." or path = "/.":
                 fh = self.rootdh
                 fattr = self.rootattr
             else:
