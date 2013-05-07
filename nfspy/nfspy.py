@@ -107,6 +107,7 @@ class NFSNode(object):
 
 def splitport(port):
     port = port.split('/',1)
+    proto = None
     if len(port) == 2:
         port, proto = port
     else:
