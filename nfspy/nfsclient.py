@@ -44,41 +44,41 @@ class NFSError(Exception):
     NFS3ERR_JUKEBOX      =  10008
 
     lookup = {
-        NFS3ERR_PERM         :  errno.EPERM,
-        NFS3ERR_NOENT        :  errno.ENOENT,
-        NFS3ERR_IO           :  errno.EIO,
-        NFS3ERR_NXIO         :  errno.ENXIO,
-        NFS3ERR_ACCES        :  errno.EACCES,
-        NFS3ERR_EXIST        :  errno.EEXIST,
-        NFS3ERR_XDEV         :  errno.EXDEV,
-        NFS3ERR_NODEV        :  errno.ENODEV,
-        NFS3ERR_NOTDIR       :  errno.ENOTDIR,
-        NFS3ERR_ISDIR        :  errno.EISDIR,
-        NFS3ERR_FBIG         :  errno.EFBIG,
-        NFS3ERR_NOSPC        :  errno.ENOSPC,
-        NFS3ERR_ROFS         :  errno.EROFS,
-        NFS3ERR_MLINK        :  errno.EMLINK,
-        NFS3ERR_NAMETOOLONG  :  errno.ENAMETOOLONG,
-        NFS3ERR_NOTEMPTY     :  errno.ENOTEMPTY,
-        NFS3ERR_DQUOT        :  errno.EDQUOT,
-        NFS3ERR_STALE        :  errno.ESTALE,
-        NFS3ERR_REMOTE       :  errno.EREMOTE,
-        NFS3ERR_BADHANDLE    :  errno.EBADR,
-        NFS3ERR_NOT_SYNC     :  errno.EREMCHG,
-        NFS3ERR_BAD_COOKIE   :  errno.ESTALE,
-        NFS3ERR_NOTSUPP      :  errno.EOPNOTSUPP,
-        NFS3ERR_TOOSMALL     :  errno.ENOBUFS,
-        NFS3ERR_SERVERFAULT  :  errno.EREMOTEIO,
-        NFS3ERR_BADTYPE      :  errno.ESOCKTNOSUPPORT,
-        NFS3ERR_JUKEBOX      :  errno.EAGAIN,
+        NFS3ERR_PERM         :  "EPERM",
+        NFS3ERR_NOENT        :  "ENOENT",
+        NFS3ERR_IO           :  "EIO",
+        NFS3ERR_NXIO         :  "ENXIO",
+        NFS3ERR_ACCES        :  "EACCES",
+        NFS3ERR_EXIST        :  "EEXIST",
+        NFS3ERR_XDEV         :  "EXDEV",
+        NFS3ERR_NODEV        :  "ENODEV",
+        NFS3ERR_NOTDIR       :  "ENOTDIR",
+        NFS3ERR_ISDIR        :  "EISDIR",
+        NFS3ERR_FBIG         :  "EFBIG",
+        NFS3ERR_NOSPC        :  "ENOSPC",
+        NFS3ERR_ROFS         :  "EROFS",
+        NFS3ERR_MLINK        :  "EMLINK",
+        NFS3ERR_NAMETOOLONG  :  "ENAMETOOLONG",
+        NFS3ERR_NOTEMPTY     :  "ENOTEMPTY",
+        NFS3ERR_DQUOT        :  "EDQUOT",
+        NFS3ERR_STALE        :  "ESTALE",
+        NFS3ERR_REMOTE       :  "EREMOTE",
+        NFS3ERR_BADHANDLE    :  "EBADR",
+        NFS3ERR_NOT_SYNC     :  "EREMCHG",
+        NFS3ERR_BAD_COOKIE   :  "ESTALE",
+        NFS3ERR_NOTSUPP      :  "EOPNOTSUPP",
+        NFS3ERR_TOOSMALL     :  "ENOBUFS",
+        NFS3ERR_SERVERFAULT  :  "EREMOTEIO",
+        NFS3ERR_BADTYPE      :  "ESOCKTNOSUPPORT",
+        NFS3ERR_JUKEBOX      :  "EAGAIN",
     }
     def __init__(self,value=None):
         self.value = value
     def __str__(self):
         try:
-            return os.strerror(NFSError.lookup[self.value])
-        except KeyError:
-            return "NFS Error"
+            return os.strerror(getattr(errno, NFSError.lookup[self.value]))
+        except KeyError, AttributeError:
+            return "NFS Error %d" % (self.value)
     def errno(self):
         return self.value
 
