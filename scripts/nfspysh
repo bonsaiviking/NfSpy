@@ -145,6 +145,8 @@ class Commands(object):
                 report(e)
                 continue
 
+    def cat(self,filename):
+        return self.get(filename,"-")
     def get(self, filename, localname=None):
         """get <filename> [<localname>]
 
@@ -152,14 +154,18 @@ class Commands(object):
         defaults to the basename of <filename> in the current local working directory."""
         f = self.shell.canonicalize(filename)
         size = self.shell.spy.getattr(f).st_size
-        if localname and os.path.isdir(localname):
-            localname = os.path.normpath(os.path.join(localname, path.basename(f)))
-        localname = localname or path.basename(f)
-        out = open(localname, "w")
+        if localname=="-":
+            out=sys.stdout
+        else:
+            if localname and os.path.isdir(localname):
+                localname = os.path.normpath(os.path.join(localname, path.basename(f)))
+            localname = localname or path.basename(f)
+            out = open(localname, "w")
         bsize = self.shell.spy.rtsize
         for offset in range(0, size, bsize):
             out.write( self.shell.spy.read(f, bsize, offset) )
-        out.close()
+        if out!=sys.stdout:
+            out.close()
 
     def put(self, filename, remotename=None):
         """put <filename> [<remotename>]

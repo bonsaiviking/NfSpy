@@ -37,12 +37,14 @@ class FallbackTCPClient(rpc.RawTCPClient):
 class FallbackTCPMountClient(PartialMountClient, FallbackTCPClient):
     def __init__(self, host, port=None):
         self.version = 3
+        self.cred = (rpc.AUTH_NULL, rpc.make_auth_null())
         FallbackTCPClient.__init__(self, host, MOUNTPROG, 3, port)
 
 
 class FallbackUDPMountClient(PartialMountClient, FallbackUDPClient):
     def __init__(self, host, port=None):
         self.version = 3
+        self.cred = (rpc.AUTH_NULL, rpc.make_auth_null())
         FallbackUDPClient.__init__(self, host, MOUNTPROG, 3, port)
         self.BUFSIZE = NFSSVC_MAXBLKSIZE + NFS3_READ_XDR_SIZE
 
